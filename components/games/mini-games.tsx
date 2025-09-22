@@ -10,6 +10,8 @@ export function MiniGames() {
   const {
     coinFlipResult,
     isFlipping,
+    selectedSide,
+    setSelectedSide,
     diceResult,
     isRolling,
     spinResult,
@@ -76,12 +78,25 @@ export function MiniGames() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <div
-                        className={`text-xl transition-all duration-500 ${coinFlipResult.includes("Victory") ? "text-green-400 font-bold animate-pulse" : ""}`}
-                      >
-                        {coinFlipResult || "🦅 Eagle Head vs 🐉 Dragon Tail"}
+                      <div className="space-y-2">
+                        <div className="text-4xl">
+                          {coinFlipResult ? (coinFlipResult.includes("🦅") ? "🦅" : "🐉") : "🦅 vs 🐉"}
+                        </div>
+                        <div
+                          className={`text-lg transition-all duration-500 ${
+                            coinFlipResult.includes("Victory") 
+                              ? "text-green-400 font-bold animate-pulse" 
+                              : coinFlipResult.includes("Try again") 
+                                ? "text-red-400 font-bold" 
+                                : "text-gray-400"
+                          }`}
+                        >
+                          {coinFlipResult ? 
+                            (coinFlipResult.includes("Victory") ? "Victory! +10 points" : "Try again!") 
+                            : "Choose your destiny!"
+                          }
+                        </div>
                       </div>
-                      {!coinFlipResult && <div className="text-sm text-gray-400">Choose your destiny!</div>}
                     </div>
                   )}
                   {showWinEffect && gameWinType === "coin" && (
@@ -90,12 +105,41 @@ export function MiniGames() {
                     </div>
                   )}
                 </div>
+                
+                {/* Selection Buttons */}
+                {!isFlipping && (
+                  <div className="flex gap-2 mb-3">
+                    <Button
+                      onClick={() => setSelectedSide("eagle")}
+                      variant={selectedSide === "eagle" ? "default" : "outline"}
+                      className={`flex-1 transition-all duration-300 ${
+                        selectedSide === "eagle" 
+                          ? "bg-blue-500 hover:bg-blue-600 text-white" 
+                          : "hover:bg-blue-50"
+                      }`}
+                    >
+                      🦅 Eagle
+                    </Button>
+                    <Button
+                      onClick={() => setSelectedSide("dragon")}
+                      variant={selectedSide === "dragon" ? "default" : "outline"}
+                      className={`flex-1 transition-all duration-300 ${
+                        selectedSide === "dragon" 
+                          ? "bg-red-500 hover:bg-red-600 text-white" 
+                          : "hover:bg-red-50"
+                      }`}
+                    >
+                      🐉 Dragon
+                    </Button>
+                  </div>
+                )}
+                
                 <Button
-                  onClick={playCoinFlip}
-                  disabled={isFlipping || withdrawalPoints < 5}
+                  onClick={() => playCoinFlip(selectedSide!)}
+                  disabled={isFlipping || withdrawalPoints < 5 || !selectedSide}
                   className={`w-full transition-all duration-300 ${isFlipping ? "animate-pulse" : "hover:scale-105"}`}
                 >
-                  {isFlipping ? "Flipping..." : "Flip Mythical Coin"}
+                  {isFlipping ? "Flipping..." : selectedSide ? `Flip for ${selectedSide === "eagle" ? "🦅 Eagle" : "🐉 Dragon"}` : "Select Eagle or Dragon"}
                 </Button>
               </CardContent>
             </Card>

@@ -19,7 +19,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { CreditCard, CheckCircle, AlertCircle, ArrowRight, Sparkles, Trophy, Copy } from "lucide-react"
+import { CreditCard, CheckCircle, AlertCircle, ArrowRight, Sparkles, Trophy, Copy, Users, ExternalLink, UserCheck } from "lucide-react"
+import { ReferralTree } from "./referral-tree"
 import { formatUnits, parseUnits } from "viem"
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi"
 import { CONTRACTS, ABIS } from "@/constant/constant"
@@ -74,12 +75,15 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
 
   // ---------------- READ USER DATA ----------------
   let user: any = null
+  let getReferral: any = null
+  let getReferral1: any = null
   let referrals = 0
   let currentLevel = 1
   let totalEarned = 0
   let balance = 0
   let progressToNext = 0
   let levelDepositAmount: number = 0
+  let totalTreeReferrals = 0
 
   try {
     const userData = useReadContract({
@@ -95,7 +99,44 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
     currentLevel = user ? Number((user as any)[3]) : 1
     totalEarned = user ? Number(formatUnits((user as any)[4], 6)) : 0
     balance = user ? Number(formatUnits((user as any)[5], 6)) : 0
-    progressToNext = (referrals / 8) * 100
+
+    const getReferralData = useReadContract({
+      address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+      abi: ABIS.Referral,
+      functionName: "getReferrals",
+      args: address ? [address] : undefined,
+      query: { enabled: !!address },
+    })
+    getReferral = getReferralData.data
+    console.log("debug->getReferrals", getReferral)
+    
+    // Calculate progress based on tree structure
+    const step1Count = getReferral ? getReferral.slice(0, 2).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0
+    const step2Count = getReferral ? getReferral.slice(2, 6).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0
+    const step3Count = getReferral ? getReferral.slice(6, 14).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0
+    
+    // Progress based on tree completion: Step 1 (2) + Step 2 (4) + Step 3 (8) = 14 total
+    totalTreeReferrals = step1Count + step2Count + step3Count
+    progressToNext = (totalTreeReferrals / 14) * 100
+    
+    console.log("Debug progress calculation:", {
+      getReferral,
+      step1Count,
+      step2Count, 
+      step3Count,
+      totalTreeReferrals,
+      progressToNext
+    })
+
+    const getReferralData1 = useReadContract({
+      address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+      abi: ABIS.Referral,
+      functionName: "getReferrals",
+      args: getReferral && getReferral[1] ? [getReferral[1]] : undefined,
+      query: { enabled: !!(getReferral && getReferral[1]) },
+    })
+    getReferral1 = getReferralData1.data
+    console.log("debug->getReferrals1", getReferral1)
 
     const levelsData = useReadContract({
       address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
@@ -325,30 +366,44 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
                   <span className="text-sm font-medium text-yellow-500">Potential Reward</span>
                 </div>
                 <p className="text-2xl sm:text-3xl font-bold text-yellow-500">${levelDepositAmount * 8}</p>
-                <p className="text-xs text-muted-foreground mt-1">From 8 referrals</p>
+                <p className="text-xs text-muted-foreground mt-1">8x Return</p>
               </div>
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
+            {/* <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
               <span>ROI:</span>
               <span className="font-bold text-green-500">
                 +{((currentLevelData.reward / currentLevelData.amount - 1) * 100).toFixed(0)}%
               </span>
               <ArrowRight className="h-4 w-4" />
               <span>Complete your network to unlock rewards</span>
-            </div>
+            </div> */}
           </div>
         </div>
 
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
-            <span className="flex items-center gap-2">Network Progress</span>
-            <span className="font-semibold">{referrals}/8 referrals</span>
+            <span className="flex items-center gap-2">Tree Network Progress</span>
+            <span className="font-semibold">{totalTreeReferrals}/14 referrals</span>
           </div>
           <div className="relative">
             <Progress value={progressToNext} className="h-4 progress-animated" />
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-xs font-semibold text-white drop-shadow-lg">{Math.round(progressToNext)}%</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+            <div className="text-center">
+              <div className="font-semibold text-green-500">Step 1: {getReferral ? getReferral.slice(0, 2).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0}/2</div>
+              <div className="text-xs">Direct</div>
+            </div>
+            <div className="text-center">
+              <div className="font-semibold text-blue-500">Step 2: {getReferral ? getReferral.slice(2, 6).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0}/4</div>
+              <div className="text-xs">Their referrals</div>
+            </div>
+            <div className="text-center">
+              <div className="font-semibold text-purple-500">Step 3: {getReferral ? getReferral.slice(6, 14).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0}/8</div>
+              <div className="text-xs">Third level</div>
             </div>
           </div>
           <div className="flex justify-between text-xs text-muted-foreground">
@@ -496,6 +551,105 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
         Share this link to earn rewards when others join through your referral
       </p>
     </div>
+
+    {/* Referral Addresses Section */}
+    {/* <div className="space-y-4 p-4 rounded-lg bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Users className="h-5 w-5 text-green-500" />
+          <span className="text-sm font-medium text-green-500">Your Referrals</span>
+        </div>
+        <Badge variant="secondary" className="bg-green-500/20 text-green-700">
+          {getReferral ? getReferral.length : 0} addresses
+        </Badge>
+      </div>
+      
+      {getReferral && getReferral.length > 0 ? (
+        <div className="space-y-3">
+          <div className="grid gap-2 max-h-60 overflow-y-auto">
+            {getReferral.map((referralAddress: string, index: number) => (
+              <div
+                key={index}
+                className="group flex items-center justify-between p-3 rounded-lg bg-white/50 dark:bg-gray-800/50 border border-green-500/20 hover:border-green-500/40 transition-all duration-200 hover:shadow-md"
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-white text-xs font-bold">
+                    {index + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-mono text-black dark:text-gray-300 truncate">
+                      {referralAddress.slice(0, 6)}...{referralAddress.slice(-4)}
+                    </p>
+                    <p className="text-xs text-gray-800">
+                      Referral #{index + 1}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 h-8 w-8 p-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(referralAddress);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 h-8 w-8 p-0"
+                    onClick={() => {
+                      const explorerUrl = `https://bscscan.com/address/${referralAddress}`;
+                      window.open(explorerUrl, '_blank');
+                    }}
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <UserCheck className="h-3 w-3" />
+            <span>These addresses joined through your referral link</span>
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
+            <Users className="h-8 w-8 text-gray-400" />
+          </div>
+          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+            No referrals yet
+          </h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            Share your referral link to start building your network
+          </p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
+            <Sparkles className="h-3 w-3 text-blue-500" />
+            <span className="text-xs text-blue-500">Start earning with referrals</span>
+          </div>
+        </div>
+      )}
+    </div> */}
+
+    {/* Referral Tree Visualization */}
+    {getReferral && getReferral.length > 0 && (
+      <ReferralTree 
+        rootAddress={address || "0x0000000000000000000000000000000000000000"}
+        referrals={getReferral}
+        maxDepth={3}
+        onFetchReferrals={async (addr: string) => {
+          // This would be implemented to fetch referrals for a specific address
+          // For now, we'll use the existing data structure
+          return []
+        }}
+      />
+    )}
     </>
   )
 }

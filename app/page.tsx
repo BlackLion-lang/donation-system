@@ -21,10 +21,11 @@ import { DonationProvider, useDonation } from "@/contexts/donation-context"
 import { useDeposit } from "@/hooks/use-deposit"
 import { useTasks } from "@/hooks/use-tasks"
 import { levelsData } from "@/lib/levels"
+import { useContractLevels } from "@/hooks/use-contract-levels"
 
 function DashboardContent() {
   const {
-    currentLevel,
+    currentLevel: contextCurrentLevel,
     balance,
     referrals,
     dailyTasksCompleted,
@@ -37,6 +38,9 @@ function DashboardContent() {
     transactions,
     achievements,
   } = useDonation()
+
+  // Get contract data for levels
+  const { currentLevel, contractLevels, isLoading: levelsLoading } = useContractLevels()
 
   const {
     isDepositModalOpen,
@@ -70,7 +74,7 @@ function DashboardContent() {
       <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         <Tabs defaultValue="dashboard" className="space-y-4 sm:space-y-8">
           <div className="w-full">
-            <TabsList className="grid grid-cols-6 glass-effect min-w-full sm:w-full text-xs sm:text-sm">
+            <TabsList className="grid grid-cols-4 glass-effect min-w-full sm:w-full text-xs sm:text-sm">
               <TabsTrigger value="dashboard" className="px-2 py-2">
                 <span className="hidden sm:inline">Dashboard</span>
                 <span className="sm:hidden">Home</span>
@@ -81,17 +85,17 @@ function DashboardContent() {
               <TabsTrigger value="games" className="px-2 py-2">
                 Games
               </TabsTrigger>
-              <TabsTrigger value="referrals" className="px-2 py-2">
+              {/* <TabsTrigger value="referrals" className="px-2 py-2">
                 <span className="hidden sm:inline">Referrals</span>
                 <span className="sm:hidden">Refs</span>
-              </TabsTrigger>
+              </TabsTrigger> */}
               <TabsTrigger value="tasks" className="px-2 py-2">
                 Tasks
               </TabsTrigger>
-              <TabsTrigger value="achievements" className="px-2 py-2">
+              {/* <TabsTrigger value="achievements" className="px-2 py-2">
                 <span className="hidden sm:inline">Achievements</span>
                 <span className="sm:hidden">Awards</span>
-              </TabsTrigger>
+              </TabsTrigger> */}
               {/* <TabsTrigger value="transactions" className="px-2 py-2">
                 <span className="hidden sm:inline">Transactions</span>
                 <span className="sm:hidden">History</span>
@@ -150,76 +154,94 @@ function DashboardContent() {
             </Card> */}
 
             <div className="grid gap-3 sm:gap-4">
-              {levelsData.map((level, index) => (
-                <Card
-                  key={level.id}
-                  className={`${index + 1 === currentLevel ? "level-up-animation" : "hover-lift"} ${index + 1 < currentLevel ? "opacity-60" : ""}`}
-                >
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                        <div className="flex items-start gap-3 sm:gap-4">
-                          <div className="text-2xl sm:text-3xl float-animation">{level.icon}</div>
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-base sm:text-lg">{level.name}</h3>
-                            <p className="text-sm text-muted-foreground mb-2">{level.category}</p>
-                            <p className="text-sm italic text-muted-foreground/80 mb-2">"{level.description}"</p>
-                            <div className="flex flex-wrap gap-2">
-                              {index + 1 === currentLevel && (
-                                <Badge variant="default" className="text-xs">
-                                  Current Level
-                                </Badge>
-                              )}
-                              {index + 1 < currentLevel && (
-                                <Badge variant="secondary" className="text-xs">
-                                  Completed
-                                </Badge>
+              {levelsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  <span className="ml-2 text-muted-foreground">Loading levels...</span>
+                </div>
+              ) : (
+                contractLevels.map((contractLevel, index) => {
+                  const staticLevel = levelsData[index]
+                  if (!staticLevel) return null
+                  
+                  return (
+                    <Card
+                      key={contractLevel.id}
+                      className={`${contractLevel.id === currentLevel ? "level-up-animation" : "hover-lift"} ${contractLevel.id < currentLevel ? "opacity-60" : ""}`}
+                    >
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="flex flex-col gap-4">
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                            <div className="flex items-start gap-3 sm:gap-4">
+                              <div className="text-2xl sm:text-3xl float-animation">{staticLevel.icon}</div>
+                              <div className="flex-1">
+                                <h3 className="font-semibold text-base sm:text-lg">{staticLevel.name}</h3>
+                                <p className="text-sm text-muted-foreground mb-2">{staticLevel.category}</p>
+                                <p className="text-sm italic text-muted-foreground/80 mb-2">"{staticLevel.description}"</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {contractLevel.id === currentLevel && (
+                                    <Badge variant="default" className="text-xs">
+                                      Current Level
+                                    </Badge>
+                                  )}
+                                  {contractLevel.id < currentLevel && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      Completed
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+                              <div className="text-center sm:text-right">
+                                <p className="text-sm text-muted-foreground">
+                                  Invest ${contractLevel.isLoaded ? contractLevel.amount.toFixed(0) : staticLevel.amount}
+                                </p>
+                                <p className="text-lg font-bold text-primary">
+                                  Earn ${contractLevel.isLoaded ? (contractLevel.amount * 8).toFixed(0) : staticLevel.reward}
+                                </p>
+                              </div>
+                              {contractLevel.id === currentLevel && isConnected && (
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button className="deposit-button w-full sm:w-auto">
+                                      <CreditCard className="mr-2 h-4 w-4" />
+                                      Deposit
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-md gradient-border z-50">
+                                    <DialogHeader>
+                                      <DialogTitle className="flex items-center gap-2">
+                                        <span className="text-2xl">{staticLevel.icon}</span>
+                                        <span className="text-sm sm:text-base">{staticLevel.name}</span>
+                                      </DialogTitle>
+                                      <DialogDescription className="text-sm italic">
+                                        "{staticLevel.description}"
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                      <div className="text-center p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                                        <p className="text-sm text-muted-foreground">Required Investment</p>
+                                        <p className="text-2xl sm:text-3xl font-bold text-green-500">
+                                          ${contractLevel.isLoaded ? contractLevel.amount.toFixed(0) : staticLevel.amount}
+                                        </p>
+                                      </div>
+                                      <Button className="w-full deposit-button h-12" size="lg">
+                                        <CheckCircle className="mr-2 h-4 w-4" />
+                                        Confirm Deposit
+                                      </Button>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
                               )}
                             </div>
                           </div>
                         </div>
-                        <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
-                          <div className="text-center sm:text-right">
-                            <p className="text-sm text-muted-foreground">Invest ${level.amount}</p>
-                            <p className="text-lg font-bold text-primary">Earn ${level.reward}</p>
-                          </div>
-                          {index + 1 === currentLevel && isConnected && (
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button className="deposit-button w-full sm:w-auto">
-                                  <CreditCard className="mr-2 h-4 w-4" />
-                                  Deposit
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-md gradient-border z-50">
-                                <DialogHeader>
-                                  <DialogTitle className="flex items-center gap-2">
-                                    <span className="text-2xl">{level.icon}</span>
-                                    <span className="text-sm sm:text-base">{level.name}</span>
-                                  </DialogTitle>
-                                  <DialogDescription className="text-sm italic">
-                                    "{level.description}"
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <div className="text-center p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                                    <p className="text-sm text-muted-foreground">Required Investment</p>
-                                    <p className="text-2xl sm:text-3xl font-bold text-green-500">${level.amount}</p>
-                                  </div>
-                                  <Button className="w-full deposit-button h-12" size="lg">
-                                    <CheckCircle className="mr-2 h-4 w-4" />
-                                    Confirm Deposit
-                                  </Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })
+              )}
             </div>
           </TabsContent>
 
@@ -280,7 +302,7 @@ function DashboardContent() {
             </Card>
           </TabsContent> */}
 
-          <TabsContent value="referrals" className="space-y-6">
+          {/* <TabsContent value="referrals" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Your Referral Network</CardTitle>
@@ -315,7 +337,7 @@ function DashboardContent() {
                 </Button>
               </CardContent>
             </Card>
-          </TabsContent>
+          </TabsContent> */}
 
           <TabsContent value="tasks" className="space-y-6">
             <Card>
@@ -349,7 +371,7 @@ function DashboardContent() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="achievements" className="space-y-6">
+          {/* <TabsContent value="achievements" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -393,7 +415,7 @@ function DashboardContent() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
+          </TabsContent> */}
         </Tabs>
       </div>
     </div>

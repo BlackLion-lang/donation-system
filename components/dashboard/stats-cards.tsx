@@ -21,7 +21,7 @@ export function StatsCards({
   handleWithdraw,
 }: StatsCardsProps) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
       <Card className="hover-lift scale-in holographic">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
           <CardTitle className="text-xs sm:text-sm font-medium">Withdrawal Points</CardTitle>
@@ -36,15 +36,15 @@ export function StatsCards({
               size="sm"
               className="w-full text-xs mt-2"
               onClick={handleWithdraw}
-              disabled={withdrawalPoints < 100}
+              disabled={withdrawalPoints < 75}
             >
-              {withdrawalPoints >= 100 ? "Withdraw $100" : `Need ${100 - withdrawalPoints} more`}
+              {withdrawalPoints >= 75 ? "Withdraw" : `At least ${75 - withdrawalPoints} required`}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="hover-lift scale-in holographic">
+      {/* <Card className="hover-lift scale-in holographic">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
           <CardTitle className="text-xs sm:text-sm font-medium">Active Network</CardTitle>
           <Users className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500 float-animation" />
@@ -53,7 +53,7 @@ export function StatsCards({
           <div className="text-xl sm:text-2xl font-bold text-blue-500">{referrals}</div>
           <p className="text-xs text-muted-foreground">{8 - referrals} more needed</p>
         </CardContent>
-      </Card>
+      </Card> */}
 
       <Card className="hover-lift scale-in holographic">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">

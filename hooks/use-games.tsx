@@ -8,6 +8,7 @@ export function useGames() {
 
   const [coinFlipResult, setCoinFlipResult] = useState("")
   const [isFlipping, setIsFlipping] = useState(false)
+  const [selectedSide, setSelectedSide] = useState<"eagle" | "dragon" | null>(null)
   const [diceResult, setDiceResult] = useState(0)
   const [isRolling, setIsRolling] = useState(false)
   const [spinResult, setSpinResult] = useState("")
@@ -16,9 +17,14 @@ export function useGames() {
   const [showParticles, setShowParticles] = useState(false)
   const [gameWinType, setGameWinType] = useState("")
 
-  const playCoinFlip = () => {
+  const playCoinFlip = (userChoice: "eagle" | "dragon") => {
     if (withdrawalPoints < 5) {
       alert("Need at least 5 withdrawal points to play!")
+      return
+    }
+
+    if (!userChoice) {
+      alert("Please select Eagle or Dragon before flipping!")
       return
     }
 
@@ -27,14 +33,12 @@ export function useGames() {
     setShowWinEffect(false)
     setCoinFlipResult("")
 
-    const targetSide = Math.random() > 0.5 ? "Heads" : "Tails"
-    const animalPart = targetSide === "Heads" ? "🦅 Eagle Head" : "🐉 Dragon Tail"
-
     setTimeout(() => {
-      const result = Math.random() > 0.5 ? "Heads" : "Tails"
-      const resultAnimal = result === "Heads" ? "🦅 Eagle Head" : "🐉 Dragon Tail"
+      const result = Math.random() > 0.5 ? "eagle" : "dragon"
+      const resultAnimal = result === "eagle" ? "🦅 Eagle Head" : "🐉 Dragon Tail"
+      const userChoiceAnimal = userChoice === "eagle" ? "🦅 Eagle Head" : "🐉 Dragon Tail"
 
-      if (Math.random() > 0.6) {
+      if (result === userChoice) {
         setWithdrawalPoints((prev) => Math.min(100, prev + 10))
         setTotalEarned((prev) => prev + 2)
         setCoinFlipResult(`${resultAnimal} - Victory! +10 points`)
@@ -133,6 +137,8 @@ export function useGames() {
   return {
     coinFlipResult,
     isFlipping,
+    selectedSide,
+    setSelectedSide,
     diceResult,
     isRolling,
     spinResult,
