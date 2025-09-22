@@ -102,17 +102,7 @@ function DashboardContent() {
           <TabsContent value="dashboard" className="space-y-4 sm:space-y-6">
             <LevelCard
               currentLevelData={currentLevelData}
-              currentLevel={currentLevel}
-              referrals={referrals}
-              totalEarned={totalEarned}
-              balance={balance}
-              isConnected={isConnected}
-              isDepositModalOpen={isDepositModalOpen}
-              setIsDepositModalOpen={setIsDepositModalOpen}
-              depositAmount={depositAmount}
-              setDepositAmount={setDepositAmount}
-              isProcessingDeposit={isProcessingDeposit}
-              processDeposit={processDeposit}
+              walletAddress={undefined}
             />
 
             <StatsCards
