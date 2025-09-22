@@ -1,6 +1,8 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { useAccount } from "wagmi"
+import { getCurrentUTCDate, isNewDay, isConsecutiveDay, updateLoginStreak, resetDailyTasks } from "@/utils/daily-reset"
 
 interface DonationContextType {
   currentLevel: number
@@ -104,46 +106,37 @@ export function DonationProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const today = new Date().toDateString()
+    // Use UTC dates for consistency across timezones
+    const today = getCurrentUTCDate()
     const savedLastLogin = localStorage.getItem("olympus-last-login")
 
-    console.log("[v0] Streak check - Today:", today)
+    console.log("[v0] Streak check - Today (UTC):", today)
     console.log("[v0] Streak check - Saved last login:", savedLastLogin)
     console.log("[v0] Streak check - Current streak:", loadedData.streak)
 
-    if (savedLastLogin !== today) {
-      const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayString = yesterday.toDateString()
+    // Check if daily tasks should reset (new day)
+    const lastTaskDate = localStorage.getItem("olympus-last-task-date")
+    if (isNewDay(lastTaskDate)) {
+      console.log("[v0] New day detected - resetting daily tasks")
+      loadedData.dailyTasksCompleted = 0
+      localStorage.setItem("olympus-last-task-date", today)
+    }
 
-      console.log("[v0] Streak check - Yesterday:", yesterdayString)
-      console.log("[v0] Streak check - Is consecutive?", savedLastLogin === yesterdayString)
-
-      if (savedLastLogin === yesterdayString) {
-        // Consecutive day - increase streak (max 7 days) and add bonus
-        const newStreak = Math.min(loadedData.streak + 1, 7)
-        const bonusPoints = newStreak * 2
-        loadedData.streak = newStreak
-        loadedData.withdrawalPoints += bonusPoints
-        console.log(
-          "[v0] Streak bonus added! New streak:",
-          newStreak,
-          "Bonus points:",
-          bonusPoints,
-          "Total points:",
-          loadedData.withdrawalPoints,
-        )
-      } else if (savedLastLogin && savedLastLogin !== today) {
-        // Missed a day or first time - reset streak to 1
-        console.log("[v0] Streak reset - missed a day or first login")
-        loadedData.streak = 1
-        loadedData.withdrawalPoints += 1
-      } else if (!savedLastLogin) {
-        // First time login
-        console.log("[v0] First time login - starting streak")
-        loadedData.streak = 1
-        loadedData.withdrawalPoints += 1
-      }
+    // Handle login streak logic
+    if (isNewDay(savedLastLogin)) {
+      const { newStreak, bonusPoints } = updateLoginStreak(loadedData.streak, savedLastLogin)
+      
+      loadedData.streak = newStreak
+      loadedData.withdrawalPoints += bonusPoints
+      
+      console.log(
+        "[v0] Streak updated! New streak:",
+        newStreak,
+        "Bonus points:",
+        bonusPoints,
+        "Total points:",
+        loadedData.withdrawalPoints,
+      )
 
       localStorage.setItem("olympus-last-login", today)
       loadedData.lastLoginDate = today
@@ -164,84 +157,46 @@ export function DonationProvider({ children }: { children: ReactNode }) {
     console.log("[v0] Final loaded state:", loadedData)
   }, [])
 
-  // Periodic streak checking
+  // Real-time daily reset checking
   useEffect(() => {
-    const checkStreakPeriodically = () => {
-      const today = new Date().toDateString()
-      const savedLastLogin = localStorage.getItem("olympus-last-login")
+    const checkDailyReset = () => {
+      const today = getCurrentUTCDate()
+      const lastTaskDate = localStorage.getItem("olympus-last-task-date")
+      const lastLoginDate = localStorage.getItem("olympus-last-login")
 
-      console.log("[v0] Periodic streak check - Today:", today)
-      console.log("[v0] Periodic streak check - Saved last login:", savedLastLogin)
+      // Check if we need to reset daily tasks
+      if (isNewDay(lastTaskDate)) {
+        console.log("[v0] New day detected - resetting daily tasks")
+        setDailyTasksCompleted(0)
+        resetDailyTasks()
+      }
 
-      if (savedLastLogin && savedLastLogin !== today) {
-        console.log("[v0] Date changed detected - reloading streak data")
-
-        const savedData = localStorage.getItem("olympus-donation-data")
-        let loadedData = {
-          withdrawalPoints: withdrawalPoints,
-          streak: streak,
-          totalEarned: totalEarned,
-          dailyTasksCompleted: dailyTasksCompleted,
-          lastLoginDate: lastLoginDate,
-        }
-
-        if (savedData) {
-          try {
-            const parsed = JSON.parse(savedData)
-            loadedData = { ...loadedData, ...parsed }
-          } catch (error) {
-            console.error("[v0] Error loading saved data:", error)
-          }
-        }
-
-        const yesterday = new Date()
-        yesterday.setDate(yesterday.getDate() - 1)
-        const yesterdayString = yesterday.toDateString()
-
-        console.log("[v0] Recalculating streak - Yesterday:", yesterdayString)
-        console.log("[v0] Recalculating streak - Is consecutive?", savedLastLogin === yesterdayString)
-
-        if (savedLastLogin === yesterdayString) {
-          const newStreak = Math.min(loadedData.streak + 1, 7)
-          const bonusPoints = newStreak * 2
-          loadedData.streak = newStreak
-          loadedData.withdrawalPoints += bonusPoints
+      // Check if we need to update streak
+      if (isNewDay(lastLoginDate)) {
+        const { newStreak, bonusPoints } = updateLoginStreak(streak, lastLoginDate)
+        
+        if (newStreak !== streak || bonusPoints > 0) {
+          setStreak(newStreak)
+          setWithdrawalPoints(prev => prev + bonusPoints)
+          setLastLoginDate(today)
+          localStorage.setItem("olympus-last-login", today)
+          
           console.log(
-            "[v0] Streak bonus added! New streak:",
+            "[v0] Streak updated! New streak:",
             newStreak,
             "Bonus points:",
-            bonusPoints,
-            "Total points:",
-            loadedData.withdrawalPoints,
+            bonusPoints
           )
-        } else if (savedLastLogin && savedLastLogin !== today) {
-          console.log("[v0] Streak reset - missed a day")
-          loadedData.streak = 1
-          loadedData.withdrawalPoints += 1
-        } else if (!savedLastLogin) {
-          console.log("[v0] First time login - starting streak")
-          loadedData.streak = 1
-          loadedData.withdrawalPoints += 1
         }
-
-        localStorage.setItem("olympus-last-login", today)
-        loadedData.lastLoginDate = today
-
-        setWithdrawalPoints(loadedData.withdrawalPoints)
-        setStreak(loadedData.streak)
-        setTotalEarned(loadedData.totalEarned)
-        setDailyTasksCompleted(loadedData.dailyTasksCompleted)
-        setLastLoginDate(loadedData.lastLoginDate)
-
-        console.log("[v0] Updated state after time change:", loadedData)
       }
     }
 
-    checkStreakPeriodically()
-    const interval = setInterval(checkStreakPeriodically, 10000)
+    checkDailyReset()
+    // Check every 5 minutes for real-time updates
+    const interval = setInterval(checkDailyReset, 5 * 60 * 1000) // 5 minutes
 
     return () => clearInterval(interval)
-  }, [withdrawalPoints, streak, totalEarned, dailyTasksCompleted, lastLoginDate])
+  }, [streak])
 
   // Save data to localStorage when state changes
   useEffect(() => {

@@ -21,7 +21,7 @@ export function StatsCards({
   handleWithdraw,
 }: StatsCardsProps) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
       <Card className="hover-lift scale-in holographic">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
           <CardTitle className="text-xs sm:text-sm font-medium">Withdrawal Points</CardTitle>
@@ -31,14 +31,16 @@ export function StatsCards({
           <div className="space-y-2">
             <div className="text-xl sm:text-2xl font-bold text-green-500">{withdrawalPoints}%</div>
             <Progress value={withdrawalPoints} className="h-2 progress-animated" />
-            <p className="text-xs text-muted-foreground">Daily tasks maintain eligibility</p>
+            <p className="text-xs text-muted-foreground">
+              {withdrawalPoints >= 75 ? "Ready to withdraw!" : `${75 - withdrawalPoints} more points needed`}
+            </p>
             <Button
               size="sm"
               className="w-full text-xs mt-2"
               onClick={handleWithdraw}
               disabled={withdrawalPoints < 75}
             >
-              {withdrawalPoints >= 75 ? "Withdraw" : `At least ${75 - withdrawalPoints} required`}
+              {withdrawalPoints >= 75 ? "Withdraw" : `${75 - withdrawalPoints} more needed`}
             </Button>
           </div>
         </CardContent>
@@ -62,7 +64,9 @@ export function StatsCards({
         </CardHeader>
         <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
           <div className="text-xl sm:text-2xl font-bold text-purple-500">{dailyTasksCompleted}/5</div>
-          <p className="text-xs text-muted-foreground">+{5 - dailyTasksCompleted} points available</p>
+          <p className="text-xs text-muted-foreground">
+            {dailyTasksCompleted === 5 ? "All tasks completed! 🎉" : `+${(5 - dailyTasksCompleted) * 5} points available`}
+          </p>
         </CardContent>
       </Card>
 
@@ -72,8 +76,10 @@ export function StatsCards({
           <Flame className="h-3 w-3 sm:h-4 sm:w-4 text-orange-500 glow-effect" />
         </CardHeader>
         <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-          <div className="text-xl sm:text-2xl font-bold text-orange-500">{streak}</div>
-          <p className="text-xs text-muted-foreground">Keep the momentum!</p>
+          <div className="text-xl sm:text-2xl font-bold text-orange-500">{streak}/7</div>
+          <p className="text-xs text-muted-foreground">
+            {streak === 7 ? "Max streak! 🔥" : `${7 - streak} days to max bonus`}
+          </p>
         </CardContent>
       </Card>
     </div>

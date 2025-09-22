@@ -96,7 +96,7 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
     user = userData.data
     console.log("debug->users", user)
     referrals = user ? Number((user as any)[2]) : 0
-    currentLevel = user ? Number((user as any)[3]) : 1
+    currentLevel = user ? Number((user as any)[3]) == 0 ? 1 : Number((user as any)[3]) : 1
     totalEarned = user ? Number(formatUnits((user as any)[4], 6)) : 0
     balance = user ? Number(formatUnits((user as any)[5], 6)) : 0
 
@@ -143,7 +143,7 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
       abi: ABIS.Referral,
       functionName: "levels",
       args: currentLevel ? [currentLevel] : undefined,
-      query: { enabled: !!address },
+      // query: { enabled: !!address },
     })
     const levels = levelsData.data
     levelDepositAmount = levels ? Number(formatUnits((levels as any)[0], 18)) : 0
@@ -214,7 +214,20 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
   const handleDeposit = () => {
     if (!levelDepositAmount || !deposit) return
     // Use the referrer from URL/cookies if available, otherwise use the manual input
-    const finalReferrer = refAddress || referrerAddress || "0x0000000000000000000000000000000000000000"
+    let finalReferrer = refAddress || "0x0000000000000000000000000000000000000000"
+    
+    // Safety check: Never use user's own address as referrer
+    if (finalReferrer === address) {
+      console.log("debug->handleDeposit - Prevented self-referral, using zero address");
+      finalReferrer = "0x0000000000000000000000000000000000000000";
+    }
+    
+    console.log("debug->handleDeposit - refAddress:", refAddress)
+    console.log("debug->handleDeposit - finalReferrer:", finalReferrer) 
+    console.log("debug->handleDeposit - currentLevel:", currentLevel)
+    console.log("debug->handleDeposit - address (user wallet):", address)
+    console.log("debug->handleDeposit - is finalReferrer same as user address?", finalReferrer === address)
+    
     deposit({
       address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
       abi: ABIS.Referral,
@@ -269,16 +282,34 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
   }
   
   let refAddress: string = "0x0000000000000000000000000000000000000000";
+  console.log("debug->cookies.get('ref'):", cookies.get('ref'));
+  
   if (cookies.get('ref')) {
       try {
           const decodedAddress = rot13(cookies.get('ref'));
-          if (Web3.utils.isAddress(decodedAddress)) {
+          console.log("debug->decodedAddress:", decodedAddress);
+          console.log("debug->user address:", address);
+          console.log("debug->is decodedAddress same as user address?", decodedAddress === address);
+          
+          if (Web3.utils.isAddress(decodedAddress) && decodedAddress !== address) {
               refAddress = decodedAddress;
+              console.log("debug->Valid referral detected, refAddress set to:", refAddress);
+          } else if (decodedAddress === address) {
+              console.log("debug->Prevented self-referral - using zero address");
+              refAddress = "0x0000000000000000000000000000000000000000";
+          } else {
+              console.log("debug->Invalid referral address - using zero address");
+              refAddress = "0x0000000000000000000000000000000000000000";
           }
       } catch (error) {
           console.log('Error processing stored referrer:', error);
+          refAddress = "0x0000000000000000000000000000000000000000";
       }
+  } else {
+      console.log("debug->No referral cookie found - using zero address");
   }
+  
+  console.log("debug->final refAddress:", refAddress);
 
   const BASE_URL = 'localhost:3000';
   const [copied, setCopied] = useState(false);
@@ -311,15 +342,15 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <CardTitle className="text-xl sm:text-2xl flex items-center gap-2">
-              <span className="text-2xl sm:text-3xl float-animation">{currentLevelData.icon}</span>
+              <span className="text-2xl sm:text-3xl float-animation">{currentLevelData?.icon || "🏆"}</span>
               <div>
-                <div className="text-base sm:text-xl">{currentLevelData.name}</div>
+                <div className="text-base sm:text-xl">{currentLevelData?.name || "Loading..."}</div>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   <Badge variant="secondary" className="text-xs holographic">
                     Level {currentLevel}
                   </Badge>
                   <Badge variant="outline" className="text-xs">
-                    <span className="hidden sm:inline">{currentLevelData.category}</span>
+                    <span className="hidden sm:inline">{currentLevelData?.category || "Category"}</span>
                     <span className="sm:hidden">Cat {currentLevel}</span>
                   </Badge>
                 </div>
@@ -327,7 +358,7 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
 
             </CardTitle>
             <CardDescription className="mt-2 text-sm italic text-muted-foreground">
-              "{currentLevelData.description}"
+              "{currentLevelData?.description || "Loading level information..."}"
             </CardDescription>
           </div>
           <div className="text-center sm:text-right">
@@ -373,7 +404,7 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
             {/* <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
               <span>ROI:</span>
               <span className="font-bold text-green-500">
-                +{((currentLevelData.reward / currentLevelData.amount - 1) * 100).toFixed(0)}%
+                +{currentLevelData ? ((currentLevelData.reward / currentLevelData.amount - 1) * 100).toFixed(0) : "0"}%
               </span>
               <ArrowRight className="h-4 w-4" />
               <span>Complete your network to unlock rewards</span>
@@ -424,8 +455,8 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
           <DialogContent className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-md z-50">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
-                <span className="text-xl sm:text-2xl">{currentLevelData.icon}</span>
-                <span className="text-sm sm:text-base">Deposit for {currentLevelData.name}</span>
+                <span className="text-xl sm:text-2xl">{currentLevelData?.icon || "🏆"}</span>
+                <span className="text-sm sm:text-base">Deposit for {currentLevelData?.name || "Level"}</span>
               </DialogTitle>
               <DialogDescription className="text-sm">
                 Make your investment to start your heroic journey at Level {currentLevel}
@@ -526,31 +557,6 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
       </CardContent>
     </Card>
     
-    {/* Referral Link Section */}
-    <div className="space-y-3 p-4 rounded-lg bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20">
-      <div className="flex items-center gap-2">
-        <Copy className="h-4 w-4 text-blue-500" />
-        <span className="text-sm font-medium text-blue-500">Your Referral Link</span>
-      </div>
-      <div className="flex gap-2">
-        <Input
-          value={address ? `${BASE_URL}/?ref=${rot13(address)}` : `${BASE_URL}/?ref=`}
-          readOnly
-          className="text-xs font-mono"
-        />
-        <Button
-          onClick={handleCopyReferral}
-          size="sm"
-          variant="outline"
-          className="shrink-0"
-        >
-          {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Share this link to earn rewards when others join through your referral
-      </p>
-    </div>
 
     {/* Referral Addresses Section */}
     {/* <div className="space-y-4 p-4 rounded-lg bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20">
@@ -637,19 +643,98 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
       )}
     </div> */}
 
-    {/* Referral Tree Visualization */}
-    {getReferral && getReferral.length > 0 && (
-      <ReferralTree 
-        rootAddress={address || "0x0000000000000000000000000000000000000000"}
-        referrals={getReferral}
-        maxDepth={3}
-        onFetchReferrals={async (addr: string) => {
-          // This would be implemented to fetch referrals for a specific address
-          // For now, we'll use the existing data structure
-          return []
-        }}
-      />
-    )}
+    {/* Referral Network Section - Always Visible */}
+    <Card className="hover-lift scale-in holographic border-green-200 dark:border-green-800">
+      <CardHeader className="bg-gradient-to-r text-white">
+        <CardTitle className="flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          Your Referral Network
+        </CardTitle>
+        <CardDescription className="text-green-100">
+          Build your network and earn rewards through referrals
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6 p-6">
+        {/* Network Stats */}
+        {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+              {getReferral?.length || 0}
+            </div>
+            <div className="text-sm text-green-600 dark:text-green-400">Total Referrals</div>
+          </div>
+          <div className="text-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              {getReferral?.filter((ref: any) => ref.level === 1).length || 0}
+            </div>
+            <div className="text-sm text-blue-600 dark:text-blue-400">Level 1</div>
+          </div>
+          <div className="text-center p-4 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
+            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+              {getReferral?.filter((ref: any) => ref.level === 2).length || 0}
+            </div>
+            <div className="text-sm text-purple-600 dark:text-purple-400">Level 2</div>
+          </div>
+        </div> */}
+
+        {/* Referral Tree Visualization - Only show if there are referrals */}
+        {getReferral && getReferral.length > 0 && (
+          <div className="space-y-4">
+            {/* <h3 className="text-lg font-semibold text-center">Your Referral Tree</h3> */}
+            <ReferralTree 
+              rootAddress={address || "0x0000000000000000000000000000000000000000"}
+              referrals={getReferral}
+              maxDepth={3}
+              onFetchReferrals={async (addr: string) => {
+                // This would be implemented to fetch referrals for a specific address
+                // For now, we'll use the existing data structure
+                return []
+              }}
+            />
+          </div>
+        )}
+
+        {/* No Referrals Message */}
+        {(!getReferral || getReferral.length === 0) && (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
+              <Users className="h-8 w-8 text-green-500" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">Start Building Your Network</h3>
+            <p className="text-muted-foreground mb-4">
+              Share your referral link to start earning rewards from your network
+            </p>
+          </div>
+        )}
+
+        {/* Referral Link Section */}
+        <div className="space-y-4 p-6 rounded-lg bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20">
+          <div className="flex items-center gap-2">
+            <Copy className="h-5 w-5 text-blue-500" />
+            <span className="text-lg font-semibold text-blue-500">Your Referral Link</span>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={address ? `${BASE_URL}/?ref=${rot13(address)}` : `${BASE_URL}/?ref=`}
+              readOnly
+              className="text-sm font-mono text-black bg-white dark:bg-gray-800"
+            />
+            <Button
+              onClick={handleCopyReferral}
+              size="lg"
+              className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6"
+            >
+              {copied ? <CheckCircle className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+              {copied ? "Copied!" : "Copy Link"}
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Sparkles className="h-4 w-4 text-yellow-500" />
+            <span>Earn rewards when others join through your referral link</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
     </>
   )
 }

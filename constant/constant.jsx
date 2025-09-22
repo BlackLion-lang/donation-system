@@ -4,7 +4,7 @@ import USDTABI from './USDT.json'
 // Contract addresses
 export const CONTRACTS = {
 
-  Referral_ADDRESS: '0x42972c3d25f99c8ab19f2f6ef3ea762d7c454785',
+  Referral_ADDRESS: '0x1AC6246e751D8d017Fd9FC4fA94088a70682c4ac',
   USDT_ADDRESS: '0x774bccb917a7634b857c9499061167d256721490'
 };
 

@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Users, Star, Trophy, Target, CreditCard, CheckCircle, ChevronRight } from "lucide-react"
+import { Users, Star, Trophy, Target, CreditCard, CheckCircle, ChevronRight, Flame } from "lucide-react"
 import { Header } from "@/components/dashboard/header"
 import { LevelCard } from "@/components/dashboard/level-card"
 import { StatsCards } from "@/components/dashboard/stats-cards"
@@ -22,8 +22,11 @@ import { useDeposit } from "@/hooks/use-deposit"
 import { useTasks } from "@/hooks/use-tasks"
 import { levelsData } from "@/lib/levels"
 import { useContractLevels } from "@/hooks/use-contract-levels"
+import { useState, useEffect } from "react"
 
 function DashboardContent() {
+  const [timeUntilReset, setTimeUntilReset] = useState("")
+  
   const {
     currentLevel: contextCurrentLevel,
     balance,
@@ -38,6 +41,39 @@ function DashboardContent() {
     transactions,
     achievements,
   } = useDonation()
+
+  // Real-time clock for daily reset
+  useEffect(() => {
+    const updateTimeUntilReset = () => {
+      // Get current time
+      const now = new Date()
+      
+      // Get current UTC time
+      const utcNow = new Date(now.toISOString())
+      
+      // Get current UTC date (YYYY-MM-DD)
+      const today = utcNow.toISOString().split('T')[0]
+      
+      // Create tomorrow's midnight UTC (00:00:00 UTC tomorrow)
+      const tomorrowMidnight = new Date(today + 'T00:00:00.000Z')
+      tomorrowMidnight.setUTCDate(tomorrowMidnight.getUTCDate() + 1)
+      
+      // Calculate time difference in milliseconds
+      const timeDiff = tomorrowMidnight.getTime() - utcNow.getTime()
+      
+      // Convert to hours, minutes, seconds
+      const hours = Math.floor(timeDiff / (1000 * 60 * 60))
+      const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000)
+      
+      setTimeUntilReset(`${hours}h ${minutes}m ${seconds}s`)
+    }
+
+    updateTimeUntilReset()
+    const interval = setInterval(updateTimeUntilReset, 1000) // Update every second
+
+    return () => clearInterval(interval)
+  }, [])
 
   // Get contract data for levels
   const { currentLevel, contractLevels, isLoading: levelsLoading } = useContractLevels()
@@ -69,7 +105,7 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header balance={balance} streak={streak}  />
+      <Header balance={balance} streak={streak} />
 {/* isConnected={isConnected} connectWallet={connectWallet} */}
       <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         <Tabs defaultValue="dashboard" className="space-y-4 sm:space-y-8">
@@ -195,10 +231,10 @@ function DashboardContent() {
                             <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
                               <div className="text-center sm:text-right">
                                 <p className="text-sm text-muted-foreground">
-                                  Invest ${contractLevel.isLoaded ? contractLevel.amount.toFixed(0) : staticLevel.amount}
+                                  Invest ${contractLevel.isLoaded ? contractLevel.amount.toFixed(0) : "No data"}
                                 </p>
                                 <p className="text-lg font-bold text-primary">
-                                  Earn ${contractLevel.isLoaded ? (contractLevel.amount * 8).toFixed(0) : staticLevel.reward}
+                                  Earn ${contractLevel.isLoaded ? (contractLevel.amount * 8).toFixed(0) : "No data"}
                                 </p>
                               </div>
                               {contractLevel.id === currentLevel && isConnected && (
@@ -340,33 +376,187 @@ function DashboardContent() {
           </TabsContent> */}
 
           <TabsContent value="tasks" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Daily Heroic Tasks</CardTitle>
-                <CardDescription>Complete tasks to maintain your withdrawal eligibility</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { task: "Login to your account", completed: true },
-                  { task: "Check your referral progress", completed: true },
-                  { task: "Share your referral link", completed: dailyTasksCompleted >= 3 },
-                  { task: "Visit the levels page", completed: dailyTasksCompleted >= 4 },
-                  { task: "Engage with community", completed: dailyTasksCompleted >= 5 },
-                ].map((item, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 rounded-lg border">
-                    <span className={item.completed ? "line-through text-muted-foreground" : ""}>{item.task}</span>
-                    {item.completed ? (
-                      <Badge variant="default">
-                        <Star className="h-3 w-3 mr-1" />
-                        Complete
-                      </Badge>
-                    ) : (
-                      <Button size="sm" onClick={completeDailyTask}>
-                        Complete
-                      </Button>
-                    )}
+            {/* Progress Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-200 dark:border-blue-800">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Daily Progress</p>
+                      <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{dailyTasksCompleted}/5</p>
+                    </div>
+                    <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
+                      <Trophy className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    </div>
                   </div>
-                ))}
+                  <div className="mt-2">
+                    <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                      <div 
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${(dailyTasksCompleted / 5) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/20 dark:to-green-900/20 border-green-200 dark:border-green-800">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-800 dark:text-green-200">Points Earned</p>
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">{dailyTasksCompleted * 5}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
+                      <Star className="h-6 w-6 text-green-600 dark:text-green-400" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    {25 - (dailyTasksCompleted * 5)} more available
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950/20 dark:to-orange-900/20 border-orange-200 dark:border-orange-800">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-orange-800 dark:text-orange-200">Login Streak</p>
+                      <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{streak}/7</p>
+                    </div>
+                    <div className="w-12 h-12 bg-orange-500/20 rounded-full flex items-center justify-center">
+                      <Flame className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                    {streak === 7 ? "Max streak! 🔥" : `${7 - streak} days to max`}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Daily Tasks */}
+            <Card className="overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Trophy className="h-5 w-5" />
+                      Daily Heroic Tasks
+                    </CardTitle>
+                    <CardDescription className="text-purple-100">
+                      Complete tasks daily to earn withdrawal points. Tasks reset every day at midnight UTC.
+                    </CardDescription>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-purple-200">Next Reset</div>
+                    <div className="text-lg font-bold text-white">{timeUntilReset}</div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="space-y-0">
+                  {[
+                    { 
+                      task: "Login to your account", 
+                      description: "Visit the platform daily",
+                      icon: "🏠",
+                      completed: dailyTasksCompleted >= 1,
+                      points: 5
+                    },
+                    { 
+                      task: "Check your progress", 
+                      description: "Review your dashboard and stats",
+                      icon: "📊",
+                      completed: dailyTasksCompleted >= 2,
+                      points: 5
+                    },
+                    { 
+                      task: "Explore levels page", 
+                      description: "Browse available investment levels",
+                      icon: "📈",
+                      completed: dailyTasksCompleted >= 3,
+                      points: 5
+                    },
+                    { 
+                      task: "Play mini-games", 
+                      description: "Engage with the gaming features",
+                      icon: "🎮",
+                      completed: dailyTasksCompleted >= 4,
+                      points: 5
+                    },
+                    { 
+                      task: "Complete all tasks", 
+                      description: "Finish your daily checklist",
+                      icon: "✅",
+                      completed: dailyTasksCompleted >= 5,
+                      points: 5
+                    },
+                  ].map((item, index) => (
+                    <div key={index} className={`flex items-center justify-between p-6 border-b last:border-b-0 transition-all duration-300 ${
+                      item.completed 
+                        ? "bg-green-50 dark:bg-green-950/10 border-green-200 dark:border-green-800" 
+                        : "hover:bg-muted/30"
+                    }`}>
+                      <div className="flex items-center gap-4 flex-1">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl transition-all duration-300 ${
+                          item.completed 
+                            ? "bg-green-500 text-white" 
+                            : "bg-muted text-muted-foreground"
+                        }`}>
+                          {item.completed ? "✓" : item.icon}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-semibold text-lg ${item.completed ? "line-through text-muted-foreground" : ""}`}>
+                              {item.task}
+                            </span>
+                            {item.completed && (
+                              <div className="flex items-center gap-1">
+                                <Star className="h-4 w-4 text-green-500" />
+                                <span className="text-sm text-green-600 dark:text-green-400 font-medium">+{item.points}</span>
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {item.completed ? (
+                          <Badge variant="default" className="bg-green-500 hover:bg-green-600 text-white px-4 py-2">
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Completed
+                          </Badge>
+                        ) : (
+                          <Button 
+                            size="lg" 
+                            onClick={completeDailyTask} 
+                            disabled={dailyTasksCompleted >= 5}
+                            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-6 py-2"
+                          >
+                            Complete Task
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {dailyTasksCompleted === 5 && (
+                  <div className="p-6 bg-gradient-to-r from-green-500 to-emerald-500 text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                        <Trophy className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg">All Daily Tasks Completed! 🎉</h3>
+                        <p className="text-green-100">
+                          You've earned 25 points today! Come back tomorrow for new tasks.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
