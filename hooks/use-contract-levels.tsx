@@ -41,7 +41,7 @@ export function useContractLevels() {
         abi: ABIS.Referral,
         functionName: "levels",
         args: [levelId],
-        query: { enabled: isConnected },
+        // query: { enabled: isConnected },
       })
     } catch (error) {
       console.log(`[useContractLevels] Error fetching level ${levelId}`)
