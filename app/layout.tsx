@@ -6,9 +6,9 @@ import { ClientProvider } from '@/components/providers/client-provider'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
+  title: 'Donation System',
+  description: 'Donation System',
+  generator: 'Donation System',
 }
 
 export default function RootLayout({
