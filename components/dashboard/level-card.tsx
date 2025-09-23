@@ -340,7 +340,7 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
   }
   
 
-  const BASE_URL = 'localhost:3000';
+  const BASE_URL = 'https://donation-system-eosin.vercel.app/';
   const [copied, setCopied] = useState(false);
   const handleCopyReferral = () => {
       const referralLink = address ? `${BASE_URL}/?ref=${rot13(address)}` : `${BASE_URL}/?ref=`
