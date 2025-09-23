@@ -20,6 +20,21 @@ interface ReferralTreeProps {
   referrals: string[]
   maxDepth?: number
   onFetchReferrals?: (address: string) => Promise<string[]>
+  stepCounts?: {
+    step1: number
+    step2: number
+    step3: number
+  }
+  step2Data?: {
+    step2_1: any
+    step2_2: any
+  }
+  step3Data?: {
+    step3_1: any
+    step3_2: any
+    step3_3: any
+    step3_4: any
+  }
 }
 
 interface TreeNodeProps {
@@ -36,39 +51,43 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, depth, maxDepth, onToggle, on
   const isExpanded = node.isExpanded ?? false
   const isLeaf = !hasChildren
   
-  console.log(`TreeNode: ${node.address}, level: ${node.level}, hasChildren: ${hasChildren}, isExpanded: ${isExpanded}`)
 
   return (
     <div className="relative">
       {/* Node Content */}
       <div 
         className={cn(
-          "flex items-center gap-1 sm:gap-2 p-1.5 sm:p-3 rounded-lg border transition-all duration-200 hover:shadow-md cursor-pointer",
+          "flex items-center gap-1 sm:gap-2 p-1.5 sm:p-3 rounded-lg border transition-all duration-200 hover:shadow-md",
           "bg-white/50 dark:bg-gray-800/50 border-green-500/20 hover:border-green-500/40",
-          depth === 0 && "bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/30"
+          depth === 0 && "bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/30",
+          (hasChildren || node.level <= 3) && "cursor-pointer"
         )}
-        onClick={() => {
-          if (hasChildren || node.level === 3) {
-            console.log(`Clicking entire node: ${node.address}, level: ${node.level}`)
-            onToggle(node)
+        onClick={(e) => {
+          // Only handle click if it's not on a button
+          const target = e.target as HTMLElement
+          if (e.target === e.currentTarget || !target.closest('button')) {
+            if (hasChildren || node.level <= 3) {
+              onToggle(node)
+            }
           }
         }}
       >
          {/* Expand/Collapse Button */}
-         {(hasChildren || node.level === 3) && (
+         {(hasChildren || node.level <= 3) && (
            <Button
              variant="ghost"
              size="sm"
-             className="h-4 w-4 sm:h-6 sm:w-6 p-0 hover:bg-green-500/20"
-             onClick={() => {
-               console.log(`Clicking toggle for node: ${node.address}, level: ${node.level}, hasChildren: ${hasChildren}`)
+             className="h-6 w-6 sm:h-8 sm:w-8 p-1 hover:bg-green-500/20 flex-shrink-0 border border-green-500/30 rounded-md"
+             onClick={(e) => {
+               e.preventDefault()
+               e.stopPropagation() // Prevent the parent div click from firing
                onToggle(node)
              }}
            >
              {isExpanded ? (
-               <ChevronDown className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+               <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
              ) : (
-               <ChevronRight className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+               <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
              )}
            </Button>
          )}
@@ -125,7 +144,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, depth, maxDepth, onToggle, on
             size="sm"
             variant="ghost"
             className="h-6 w-6 sm:h-8 sm:w-8 p-0 hover:bg-green-500/20"
-            onClick={() => onCopy(node.address)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onCopy(node.address)
+            }}
           >
             <Copy className="h-2 w-2 sm:h-3 sm:w-3" />
           </Button>
@@ -133,7 +155,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, depth, maxDepth, onToggle, on
             size="sm"
             variant="ghost"
             className="h-6 w-6 sm:h-8 sm:w-8 p-0 hover:bg-green-500/20"
-            onClick={() => onView(node.address)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onView(node.address)
+            }}
           >
             <ExternalLink className="h-2 w-2 sm:h-3 sm:w-3" />
           </Button>
@@ -170,11 +195,26 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, depth, maxDepth, onToggle, on
   )
 }
 
+// Helper function to validate and filter addresses
+const isValidAddress = (address: string): boolean => {
+  if (!address) return false
+  if (address === "0x0000000000000000000000000000000000000000") return false
+  if (address.length < 5) return false // More lenient validation
+  return true
+}
+
+const getValidAddress = (address: string): string => {
+  return isValidAddress(address) ? address : "0x0000000000000000000000000000000000000000"
+}
+
 export const ReferralTree: React.FC<ReferralTreeProps> = ({ 
   rootAddress, 
   referrals, 
   maxDepth = 3,
-  onFetchReferrals
+  onFetchReferrals,
+  stepCounts,
+  step2Data,
+  step3Data
 }) => {
   const [treeData, setTreeData] = useState<ReferralNode>(() => ({
     address: rootAddress,
@@ -185,71 +225,136 @@ export const ReferralTree: React.FC<ReferralTreeProps> = ({
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // Build proper tree structure with all levels
+  // Build proper tree structure with all levels - only when referrals actually change
   React.useEffect(() => {
     const buildTreeStructure = async () => {
       setLoading(true)
       
       try {
-        console.log("ReferralTree - referrals:", referrals)
-        
         // Step 1: Direct referrals (first 2)
-        const step1Referrals = referrals.slice(0, 2).filter(addr => 
-          addr && addr !== "0x0000000000000000000000000000000000000000"
-        )
+        const step1Referrals = referrals.slice(0, 2).filter(isValidAddress)
         
-        // Step 2: Each step1 referral's referrals (next 4 addresses)
+        // Step 2 and Step 3: These will be fetched dynamically when nodes are expanded
+        // We can't calculate them statically because we need to fetch each address's referrals
         const step2Referrals: string[] = []
-        for (let i = 0; i < 2; i++) {
-          const step2Start = 2 + (i * 2)
-          step2Referrals.push(
-            referrals[step2Start] || "0x0000000000000000000000000000000000000000",
-            referrals[step2Start + 1] || "0x0000000000000000000000000000000000000000"
-          )
-        }
-        
-        // Step 3: Each step2 referral's referrals (next 8 addresses)
         const step3Referrals: string[] = []
-        for (let i = 0; i < 4; i++) {
-          const step3Start = 6 + (i * 2)
-          step3Referrals.push(
-            referrals[step3Start] || "0x0000000000000000000000000000000000000000",
-            referrals[step3Start + 1] || "0x0000000000000000000000000000000000000000"
-          )
-        }
         
-        console.log("Step 1 referrals:", step1Referrals)
-        console.log("Step 2 referrals:", step2Referrals)
-        console.log("Step 3 referrals:", step3Referrals)
-        
-        // Build the complete tree structure
+        // Build the complete tree structure with pre-fetched data
         const tree: ReferralNode = {
           address: rootAddress,
           level: 1,
           id: `root-${Date.now()}`,
-          children: step1Referrals.map((addr, index) => ({
-            address: addr,
-            level: 2,
-            id: `step1-${index}-${Date.now()}`,
-            children: step2Referrals.slice(index * 2, (index * 2) + 2).map((step2Addr, step2Index) => ({
-              address: step2Addr,
-              level: 3,
-              id: `step2-${index}-${step2Index}-${Date.now()}`,
-              children: step3Referrals.slice((index * 2 + step2Index) * 2, ((index * 2 + step2Index) * 2) + 2).map((step3Addr, step3Index) => ({
-                address: step3Addr,
-                level: 4,
-                id: `step3-${index}-${step2Index}-${step3Index}-${Date.now()}`,
-                children: [],
-                isExpanded: false
-              })),
+          children: [
+            // Step 1 - First address with its Step 2 children
+            {
+              address: getValidAddress(referrals[0] || ""),
+              level: 2,
+              id: `step1-0-${Date.now()}`,
+              children: step2Data?.step2_1 && (step2Data.step2_1 as any).length > 0 ? [
+                {
+                  address: getValidAddress((step2Data.step2_1 as any).slice(0, 2)[0] || ""),
+                  level: 3,
+                  id: `step2-0-${Date.now()}`,
+                  children: step3Data?.step3_1 && (step3Data.step3_1 as any).length > 0 ? [
+                    {
+                      address: getValidAddress((step3Data.step3_1 as any).slice(0, 2)[0] || ""),
+                      level: 4,
+                      id: `step3-0-${Date.now()}`,
+                      children: [],
+                      isExpanded: false
+                    },
+                    {
+                      address: getValidAddress((step3Data.step3_1 as any).slice(0, 2)[1] || ""),
+                      level: 4,
+                      id: `step3-1-${Date.now()}`,
+                      children: [],
+                      isExpanded: false
+                    }
+                  ] : [],
+                  isExpanded: false
+                },
+                {
+                  address: getValidAddress((step2Data.step2_1 as any).slice(0, 2)[1] || ""),
+                  level: 3,
+                  id: `step2-1-${Date.now()}`,
+                  children: step3Data?.step3_2 && (step3Data.step3_2 as any).length > 0 ? [
+                    {
+                      address: getValidAddress((step3Data.step3_2 as any).slice(0, 2)[0] || ""),
+                      level: 4,
+                      id: `step3-2-${Date.now()}`,
+                      children: [],
+                      isExpanded: false
+                    },
+                    {
+                      address: getValidAddress((step3Data.step3_2 as any).slice(0, 2)[1] || ""),
+                      level: 4,
+                      id: `step3-3-${Date.now()}`,
+                      children: [],
+                      isExpanded: false
+                    }
+                  ] : [],
+                  isExpanded: false
+                }
+              ] : [],
               isExpanded: false
-            })),
-            isExpanded: false
-          })),
+            },
+            // Step 1 - Second address with its Step 2 children
+            {
+              address: getValidAddress(referrals[1] || ""),
+              level: 2,
+              id: `step1-1-${Date.now()}`,
+              children: step2Data?.step2_2 && (step2Data.step2_2 as any).length > 0 ? [
+                {
+                  address: getValidAddress((step2Data.step2_2 as any).slice(0, 2)[0] || ""),
+                  level: 3,
+                  id: `step2-2-${Date.now()}`,
+                  children: step3Data?.step3_3 && (step3Data.step3_3 as any).length > 0 ? [
+                    {
+                      address: getValidAddress((step3Data.step3_3 as any).slice(0, 2)[0] || ""),
+                      level: 4,
+                      id: `step3-4-${Date.now()}`,
+                      children: [],
+                      isExpanded: false
+                    },
+                    {
+                      address: getValidAddress((step3Data.step3_3 as any).slice(0, 2)[1] || ""),
+                      level: 4,
+                      id: `step3-5-${Date.now()}`,
+                      children: [],
+                      isExpanded: false
+                    }
+                  ] : [],
+                  isExpanded: false
+                },
+                {
+                  address: getValidAddress((step2Data.step2_2 as any).slice(0, 2)[1] || ""),
+                  level: 3,
+                  id: `step2-3-${Date.now()}`,
+                  children: step3Data?.step3_4 && (step3Data.step3_4 as any).length > 0 ? [
+                    {
+                      address: getValidAddress((step3Data.step3_4 as any).slice(0, 2)[0] || ""),
+                      level: 4,
+                      id: `step3-6-${Date.now()}`,
+                      children: [],
+                      isExpanded: false
+                    },
+                    {
+                      address: getValidAddress((step3Data.step3_4 as any).slice(0, 2)[1] || ""),
+                      level: 4,
+                      id: `step3-7-${Date.now()}`,
+                      children: [],
+                      isExpanded: false
+                    }
+                  ] : [],
+                  isExpanded: false
+                }
+              ] : [],
+              isExpanded: false
+            }
+          ],
           isExpanded: true
         }
 
-        console.log("Complete tree structure built:", tree)
         setTreeData(tree)
       } catch (error) {
         console.error("Error building tree structure:", error)
@@ -259,31 +364,58 @@ export const ReferralTree: React.FC<ReferralTreeProps> = ({
     }
 
     buildTreeStructure()
-  }, [rootAddress, referrals, maxDepth])
+  }, [rootAddress, JSON.stringify(referrals), maxDepth])
 
-  const handleToggle = (node: ReferralNode) => {
-    console.log(`Attempting to toggle node: ${node.address}, level: ${node.level}, id: ${node.id}`)
-    console.log(`Current tree data before toggle:`, treeData)
+  const handleToggle = async (node: ReferralNode) => {
     
-    const updateNode = (current: ReferralNode): ReferralNode => {
-      console.log(`Checking node: ${current.address} (id: ${current.id}) against target: ${node.address} (id: ${node.id})`)
-      
+    const updateNode = async (current: ReferralNode): Promise<ReferralNode> => {
       // Use ID for matching if available, fallback to address
       const isMatch = (current.id && node.id) ? 
         current.id === node.id : 
         current.address === node.address
       
       if (isMatch) {
-        console.log(`Found matching node: ${current.address}, current expanded: ${current.isExpanded}, will toggle to: ${!current.isExpanded}`)
-        console.log(`Node has ${current.children?.length || 0} children`)
-        const updatedNode = { ...current, isExpanded: !current.isExpanded }
-        console.log(`Updated node:`, updatedNode)
-        return updatedNode
+        // If expanding and no children exist, fetch them from contract
+        if (!current.isExpanded && (!current.children || current.children.length === 0) && onFetchReferrals) {
+          try {
+            const fetchedReferrals = await onFetchReferrals(current.address)
+            
+            // Create children from fetched referrals (always show 2 slots)
+            const children = [
+              {
+                address: getValidAddress(fetchedReferrals[0] || ""),
+                level: current.level + 1,
+                id: `${current.id}-child-0-${Date.now()}`,
+                children: [],
+                isExpanded: false
+              },
+              {
+                address: getValidAddress(fetchedReferrals[1] || ""),
+                level: current.level + 1,
+                id: `${current.id}-child-1-${Date.now()}`,
+                children: [],
+                isExpanded: false
+              }
+            ]
+            
+            const updatedNode = { 
+              ...current, 
+              isExpanded: !current.isExpanded,
+              children: children
+            }
+            return updatedNode
+          } catch (error) {
+            console.error(`Error fetching referrals for ${current.address}:`, error)
+            // Fallback to just toggling without fetching
+            return { ...current, isExpanded: !current.isExpanded }
+          }
+        } else {
+          return { ...current, isExpanded: !current.isExpanded }
+        }
       }
       
       if (current.children && current.children.length > 0) {
-        console.log(`Searching children of: ${current.address}`)
-        const updatedChildren = current.children.map(updateNode)
+        const updatedChildren = await Promise.all(current.children.map(updateNode))
         return {
           ...current,
           children: updatedChildren
@@ -293,8 +425,7 @@ export const ReferralTree: React.FC<ReferralTreeProps> = ({
       return current
     }
 
-    const newTreeData = updateNode(treeData)
-    console.log("New tree data after toggle:", newTreeData)
+    const newTreeData = await updateNode(treeData)
     setTreeData(newTreeData)
   }
 
@@ -382,22 +513,22 @@ export const ReferralTree: React.FC<ReferralTreeProps> = ({
          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20">
            <div className="text-center">
              <p className="text-lg font-bold text-green-500">
-               {treeData.children?.filter(child => child.address !== "0x0000000000000000000000000000000000000000").length || 0}
+               {stepCounts?.step1 || treeData.children?.filter(child => isValidAddress(child.address)).length || 0}
              </p>
              <p className="text-xs text-muted-foreground">Step 1 (2 max)</p>
            </div>
            <div className="text-center">
              <p className="text-lg font-bold text-blue-500">
-               {treeData.children?.reduce((sum, child) => 
-                 sum + (child.children?.filter(grandChild => grandChild.address !== "0x0000000000000000000000000000000000000000").length || 0), 0) || 0}
+               {stepCounts?.step2 || treeData.children?.reduce((sum, child) => 
+                 sum + (child.children?.filter(grandChild => isValidAddress(grandChild.address)).length || 0), 0) || 0}
              </p>
              <p className="text-xs text-muted-foreground">Step 2 (4 max)</p>
            </div>
            <div className="text-center">
              <p className="text-lg font-bold text-purple-500">
-               {treeData.children?.reduce((sum, child) => 
+               {stepCounts?.step3 || treeData.children?.reduce((sum, child) => 
                  sum + (child.children?.reduce((childSum, grandChild) => 
-                   childSum + (grandChild.children?.filter(ggChild => ggChild.address !== "0x0000000000000000000000000000000000000000").length || 0), 0) || 0), 0) || 0}
+                   childSum + (grandChild.children?.filter(ggChild => isValidAddress(ggChild.address)).length || 0), 0) || 0), 0) || 0}
              </p>
              <p className="text-xs text-muted-foreground">Step 3 (8 max)</p>
            </div>

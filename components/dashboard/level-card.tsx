@@ -36,19 +36,6 @@ interface Level {
 }
 
 interface LevelCardProps {
-  // currentLevelData: Level
-  // currentLevel: number
-  // referrals: number
-  // totalEarned: number
-  // balance: number
-  // isConnected: boolean
-  // isDepositModalOpen: boolean
-  // setIsDepositModalOpen: (open: boolean) => void
-  // depositAmount: string
-  // setDepositAmount: (amount: string) => void
-  // isProcessingDeposit: boolean
-  // processDeposit: () => void
-  // walletAddress: `0x${string}` | undefined
   currentLevelData: Level
   walletAddress: `0x${string}` | undefined
 }
@@ -58,8 +45,6 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
   const [referrerAddress, setReferrerAddress] = useState("")
   const [approved, setApproved] = useState(false)
   const [balanceUSDT, setBalanceUSDT] = useState("0")
-  // const progressToNext = (referrals / 8) * 100
-  // const [amount, setAmount] = useState("")
 
   // Safely use useAccount hook
   let address: `0x${string}` | undefined = undefined
@@ -70,13 +55,18 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
     address = account.address
     isConnected = account.isConnected
   } catch (error) {
-    console.log("[v0] Wagmi context not available in LevelCard")
   }
 
   // ---------------- READ USER DATA ----------------
   let user: any = null
   let getReferral: any = null
   let getReferral1: any = null
+  let getReferral2: any = null
+  let getReferral3_1: any = null
+  let getReferral3_2: any = null
+  let getReferral3_3: any = null
+  let getReferral3_4: any = null
+  let registered: any = null
   let referrals = 0
   let currentLevel = 1
   let totalEarned = 0
@@ -84,6 +74,9 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
   let progressToNext = 0
   let levelDepositAmount: number = 0
   let totalTreeReferrals = 0
+  let step1Count = 0
+  let step2Count = 0
+  let step3Count = 0
 
   try {
     const userData = useReadContract({
@@ -94,7 +87,7 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
       query: { enabled: !!address },
     })
     user = userData.data
-    console.log("debug->users", user)
+    registered = user ? (user as any)[0] : false
     referrals = user ? Number((user as any)[2]) : 0
     currentLevel = user ? Number((user as any)[3]) == 0 ? 1 : Number((user as any)[3]) : 1
     totalEarned = user ? Number(formatUnits((user as any)[4], 6)) : 0
@@ -108,25 +101,38 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
       query: { enabled: !!address },
     })
     getReferral = getReferralData.data
-    console.log("debug->getReferrals", getReferral)
     
-    // Calculate progress based on tree structure
-    const step1Count = getReferral ? getReferral.slice(0, 2).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0
-    const step2Count = getReferral ? getReferral.slice(2, 6).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0
-    const step3Count = getReferral ? getReferral.slice(6, 14).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0
+    // Calculate progress based on tree structure - matching referral tree logic exactly
+    // Since referral tree now only shows first 2 referrals and fetches others dynamically,
+    // we should calculate progress based on the full referral array like before
+    
+    // Get referral counts from contract (depth 1, 2, 3)
+    const referralCountsData = useReadContract({
+      address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+      abi: ABIS.Referral,
+      functionName: "getReferralCounts",
+      args: address ? [address] : undefined,
+      query: { enabled: !!address },
+    })
+    const referralCounts = referralCountsData.data
+
+    // Use contract's referral counts for accurate calculation
+    if (referralCounts) {
+      step1Count = Number((referralCounts as any)[0]) || 0  // depth 1
+      step2Count = Number((referralCounts as any)[1]) || 0  // depth 2  
+      step3Count = Number((referralCounts as any)[2]) || 0  // depth 3
+    } else {
+      // Fallback to static calculation if contract data not available
+      const step1Referrals = getReferral ? getReferral.slice(0, 2).filter((addr: any) => addr && addr !== "0x0000000000000000000000000000000000000000") : []
+      step1Count = step1Referrals.length
+      step2Count = 0
+      step3Count = 0
+    }
     
     // Progress based on tree completion: Step 1 (2) + Step 2 (4) + Step 3 (8) = 14 total
     totalTreeReferrals = step1Count + step2Count + step3Count
     progressToNext = (totalTreeReferrals / 14) * 100
     
-    console.log("Debug progress calculation:", {
-      getReferral,
-      step1Count,
-      step2Count, 
-      step3Count,
-      totalTreeReferrals,
-      progressToNext
-    })
 
     const getReferralData1 = useReadContract({
       address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
@@ -136,20 +142,76 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
       query: { enabled: !!(getReferral && getReferral[1]) },
     })
     getReferral1 = getReferralData1.data
-    console.log("debug->getReferrals1", getReferral1)
+
+    // Pre-fetch referrals for Step 1 addresses to enable proper tree functionality
+    const getReferralData2 = useReadContract({
+      address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+      abi: ABIS.Referral,
+      functionName: "getReferrals",
+      args: getReferral && getReferral[0] ? [getReferral[0]] : undefined,
+      query: { enabled: !!(getReferral && getReferral[0]) },
+    })
+    getReferral2 = getReferralData2.data
+    // console.log("debug->getReferral2", getReferral2);
+
+    // Pre-fetch Step 3 referrals for Step 2 addresses
+    // Get Step 2 addresses from both getReferral2 and getReferral1
+    const step2Addresses = [
+      ...(getReferral2 ? (getReferral2 as any).slice(0, 2) : []),
+      ...(getReferral1 ? (getReferral1 as any).slice(0, 2) : [])
+    ].filter(addr => addr && addr !== "0x0000000000000000000000000000000000000000")
+    // console.log("debug->step2Addresses", step2Addresses);
+
+    // Fetch Step 3 referrals for first Step 2 address (from getReferral2[0])
+    const getReferral3Data1 = useReadContract({
+      address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+      abi: ABIS.Referral,
+      functionName: "getReferrals",
+      args: getReferral2 && (getReferral2 as any)[0] ? [(getReferral2 as any)[0]] : undefined,
+      query: { enabled: !!(getReferral2 && (getReferral2 as any)[0]) },
+    })
+    getReferral3_1 = getReferral3Data1.data
+
+    // Fetch Step 3 referrals for second Step 2 address (from getReferral2[1])
+    const getReferral3Data2 = useReadContract({
+      address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+      abi: ABIS.Referral,
+      functionName: "getReferrals",
+      args: getReferral2 && (getReferral2 as any)[1] ? [(getReferral2 as any)[1]] : undefined,
+      query: { enabled: !!(getReferral2 && (getReferral2 as any)[1]) },
+    })
+    getReferral3_2 = getReferral3Data2.data
+
+    // Fetch Step 3 referrals for third Step 2 address (from getReferral1[0])
+    const getReferral3Data3 = useReadContract({
+      address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+      abi: ABIS.Referral,
+      functionName: "getReferrals",
+      args: getReferral1 && (getReferral1 as any)[0] ? [(getReferral1 as any)[0]] : undefined,
+      query: { enabled: !!(getReferral1 && (getReferral1 as any)[0]) },
+    })
+    getReferral3_3 = getReferral3Data3.data
+
+    // Fetch Step 3 referrals for fourth Step 2 address (from getReferral1[1])
+    const getReferral3Data4 = useReadContract({
+      address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+      abi: ABIS.Referral,
+      functionName: "getReferrals",
+      args: getReferral1 && (getReferral1 as any)[1] ? [(getReferral1 as any)[1]] : undefined,
+      query: { enabled: !!(getReferral1 && (getReferral1 as any)[1]) },
+    })
+    getReferral3_4 = getReferral3Data4.data
+
 
     const levelsData = useReadContract({
       address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
       abi: ABIS.Referral,
       functionName: "levels",
       args: currentLevel ? [currentLevel] : undefined,
-      // query: { enabled: !!address },
     })
     const levels = levelsData.data
     levelDepositAmount = levels ? Number(formatUnits((levels as any)[0], 18)) : 0
-    console.log("debug->levelDepositAmount", levelDepositAmount)
   } catch (error) {
-    console.log("[v0] Wagmi context not available for user data")
   }
 
   let usdtBalance: any = null
@@ -163,7 +225,6 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
     })
     usdtBalance = balanceData.data
   } catch (error) {
-    console.log("[v0] Wagmi context not available for USDT balance")
   }
 
   // const { data: isApproved } = useReadContract({
@@ -197,7 +258,6 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
     //   setApproved(true)
     // }
   } catch (error) {
-    console.log("[v0] Wagmi context not available for contract writes")
   }
 
   // ---------------- HANDLERS ----------------
@@ -218,15 +278,9 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
     
     // Safety check: Never use user's own address as referrer
     if (finalReferrer === address) {
-      console.log("debug->handleDeposit - Prevented self-referral, using zero address");
       finalReferrer = "0x0000000000000000000000000000000000000000";
     }
     
-    console.log("debug->handleDeposit - refAddress:", refAddress)
-    console.log("debug->handleDeposit - finalReferrer:", finalReferrer) 
-    console.log("debug->handleDeposit - currentLevel:", currentLevel)
-    console.log("debug->handleDeposit - address (user wallet):", address)
-    console.log("debug->handleDeposit - is finalReferrer same as user address?", finalReferrer === address)
     
     deposit({
       address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
@@ -244,72 +298,47 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
   
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      console.log('Current URL:', window.location.href);
-      console.log('Search string:', window.location.search);
       
       const urlParams = new URLSearchParams(window.location.search);
       const urlRef = urlParams.get('ref');
       
-      console.log('Direct URL ref:', urlRef);
-      console.log('All URL params:', Object.fromEntries(urlParams.entries()));
       
       setFinalRef(urlRef);
-      console.log('Referral code from URL (in useEffect):', urlRef);
     }
   }, []);
   
-  // Debug logging
-  console.log('Referral code from URL (outside useEffect):', finalRef);
   
   if (finalRef) {
       try {
-          console.log('Original ref code:', finalRef);
           const decodedAddress = rot13(finalRef);
-          console.log('Decoded address:', decodedAddress);
-          console.log('Is valid address?', Web3.utils.isAddress(decodedAddress));
           
           if (Web3.utils.isAddress(decodedAddress)) {
               cookies.set('ref', finalRef);
-              console.log('Valid referrer address detected:', decodedAddress);
           } else {
-              console.log('Invalid referrer address:', decodedAddress);
-              console.log('Address length:', decodedAddress.length);
-              console.log('Address starts with 0x?', decodedAddress.startsWith('0x'));
           }
       } catch (error) {
-          console.log('Error decoding referrer:', error);
       }
   }
   
   let refAddress: string = "0x0000000000000000000000000000000000000000";
-  console.log("debug->cookies.get('ref'):", cookies.get('ref'));
   
   if (cookies.get('ref')) {
       try {
           const decodedAddress = rot13(cookies.get('ref'));
-          console.log("debug->decodedAddress:", decodedAddress);
-          console.log("debug->user address:", address);
-          console.log("debug->is decodedAddress same as user address?", decodedAddress === address);
           
           if (Web3.utils.isAddress(decodedAddress) && decodedAddress !== address) {
               refAddress = decodedAddress;
-              console.log("debug->Valid referral detected, refAddress set to:", refAddress);
           } else if (decodedAddress === address) {
-              console.log("debug->Prevented self-referral - using zero address");
               refAddress = "0x0000000000000000000000000000000000000000";
           } else {
-              console.log("debug->Invalid referral address - using zero address");
               refAddress = "0x0000000000000000000000000000000000000000";
           }
       } catch (error) {
-          console.log('Error processing stored referrer:', error);
           refAddress = "0x0000000000000000000000000000000000000000";
       }
   } else {
-      console.log("debug->No referral cookie found - using zero address");
   }
   
-  console.log("debug->final refAddress:", refAddress);
 
   const BASE_URL = 'localhost:3000';
   const [copied, setCopied] = useState(false);
@@ -328,14 +357,6 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
   return (
     <>
     {/* Temporary Debug Panel */}
-    {/* <div className="mb-4 p-4 bg-white-100 border border-yellow-300 rounded-lg text-sm">
-      <h3 className="font-bold mb-2 text-yellow-800">Debug Info:</h3>
-      <p><strong>URL Ref:</strong> {finalRef || 'None'}</p>
-      <p><strong>Decoded Address:</strong> {finalRef ? rot13(finalRef) : 'None'}</p>
-      <p><strong>Is Valid Address:</strong> {finalRef ? (Web3.utils.isAddress(rot13(finalRef)) ? 'Yes' : 'No') : 'N/A'}</p>
-      <p><strong>Current URL:</strong> {typeof window !== 'undefined' ? window.location.href : 'Server'}</p>
-      <p><strong>Search String:</strong> {typeof window !== 'undefined' ? window.location.search : 'Server'}</p>
-    </div> */}
     
     <Card className=" hover-lift slide-in-up">
       <CardHeader className="pb-4">
@@ -425,15 +446,15 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
           </div>
           <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
             <div className="text-center">
-              <div className="font-semibold text-green-500">Step 1: {getReferral ? getReferral.slice(0, 2).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0}/2</div>
+              <div className="font-semibold text-green-500">Step 1: {step1Count}/2</div>
               <div className="text-xs">Direct</div>
             </div>
             <div className="text-center">
-              <div className="font-semibold text-blue-500">Step 2: {getReferral ? getReferral.slice(2, 6).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0}/4</div>
+              <div className="font-semibold text-blue-500">Step 2: {step2Count}/4</div>
               <div className="text-xs">Their referrals</div>
             </div>
             <div className="text-center">
-              <div className="font-semibold text-purple-500">Step 3: {getReferral ? getReferral.slice(6, 14).filter((addr: any) => addr !== "0x0000000000000000000000000000000000000000").length : 0}/8</div>
+              <div className="font-semibold text-purple-500">Step 3: {step3Count}/8</div>
               <div className="text-xs">Third level</div>
             </div>
           </div>
@@ -556,92 +577,6 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
         </Dialog>
       </CardContent>
     </Card>
-    
-
-    {/* Referral Addresses Section */}
-    {/* <div className="space-y-4 p-4 rounded-lg bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Users className="h-5 w-5 text-green-500" />
-          <span className="text-sm font-medium text-green-500">Your Referrals</span>
-        </div>
-        <Badge variant="secondary" className="bg-green-500/20 text-green-700">
-          {getReferral ? getReferral.length : 0} addresses
-        </Badge>
-      </div>
-      
-      {getReferral && getReferral.length > 0 ? (
-        <div className="space-y-3">
-          <div className="grid gap-2 max-h-60 overflow-y-auto">
-            {getReferral.map((referralAddress: string, index: number) => (
-              <div
-                key={index}
-                className="group flex items-center justify-between p-3 rounded-lg bg-white/50 dark:bg-gray-800/50 border border-green-500/20 hover:border-green-500/40 transition-all duration-200 hover:shadow-md"
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-white text-xs font-bold">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-mono text-black dark:text-gray-300 truncate">
-                      {referralAddress.slice(0, 6)}...{referralAddress.slice(-4)}
-                    </p>
-                    <p className="text-xs text-gray-800">
-                      Referral #{index + 1}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 h-8 w-8 p-0"
-                    onClick={() => {
-                      navigator.clipboard.writeText(referralAddress);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }}
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 h-8 w-8 p-0"
-                    onClick={() => {
-                      const explorerUrl = `https://bscscan.com/address/${referralAddress}`;
-                      window.open(explorerUrl, '_blank');
-                    }}
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <UserCheck className="h-3 w-3" />
-            <span>These addresses joined through your referral link</span>
-          </div>
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
-            <Users className="h-8 w-8 text-gray-400" />
-          </div>
-          <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-            No referrals yet
-          </h3>
-          <p className="text-xs text-muted-foreground mb-4">
-            Share your referral link to start building your network
-          </p>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-            <Sparkles className="h-3 w-3 text-blue-500" />
-            <span className="text-xs text-blue-500">Start earning with referrals</span>
-          </div>
-        </div>
-      )}
-    </div> */}
 
     {/* Referral Network Section - Always Visible */}
     <Card className="hover-lift scale-in holographic border-green-200 dark:border-green-800">
@@ -655,27 +590,6 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 p-6">
-        {/* Network Stats */}
-        {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {getReferral?.length || 0}
-            </div>
-            <div className="text-sm text-green-600 dark:text-green-400">Total Referrals</div>
-          </div>
-          <div className="text-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {getReferral?.filter((ref: any) => ref.level === 1).length || 0}
-            </div>
-            <div className="text-sm text-blue-600 dark:text-blue-400">Level 1</div>
-          </div>
-          <div className="text-center p-4 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
-            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {getReferral?.filter((ref: any) => ref.level === 2).length || 0}
-            </div>
-            <div className="text-sm text-purple-600 dark:text-purple-400">Level 2</div>
-          </div>
-        </div> */}
 
         {/* Referral Tree Visualization - Only show if there are referrals */}
         {getReferral && getReferral.length > 0 && (
@@ -685,9 +599,106 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
               rootAddress={address || "0x0000000000000000000000000000000000000000"}
               referrals={getReferral}
               maxDepth={3}
+              stepCounts={{
+                step1: step1Count,
+                step2: step2Count,
+                step3: step3Count
+              }}
+              // Pass pre-fetched data for better performance
+              step2Data={{
+                step2_1: getReferral2, // Step 2 data for first Step 1 address
+                step2_2: getReferral1  // Step 2 data for second Step 1 address
+              }}
+              step3Data={{
+                step3_1: getReferral3_1,
+                step3_2: getReferral3_2,
+                step3_3: getReferral3_3,
+                step3_4: getReferral3_4
+              }}
               onFetchReferrals={async (addr: string) => {
-                // This would be implemented to fetch referrals for a specific address
-                // For now, we'll use the existing data structure
+                console.log(`=== FETCHING REFERRALS FOR: ${addr} ===`)
+                console.log(`getReferral array:`, getReferral)
+                console.log(`getReferral2:`, getReferral2)
+                console.log(`getReferral1:`, getReferral1)
+                console.log(`getReferral2 type:`, typeof getReferral2)
+                console.log(`getReferral2 is null:`, getReferral2 === null)
+                console.log(`getReferral2 is undefined:`, getReferral2 === undefined)
+                
+                // Use pre-fetched referral data for Step 1 addresses
+                if (getReferral && getReferral.length > 0) {
+                  if (addr === getReferral[0]) {
+                    console.log(`Matched first Step 1 address: ${addr}`)
+                    if (getReferral2 && (getReferral2 as any).length > 0) {
+                      const result = (getReferral2 as any).slice(0, 2)
+                      console.log(`Returning Step 2 referrals for first Step 1:`, result)
+                      return result
+                    } else {
+                      console.log(`No Step 2 data for first Step 1 address - getReferral2 is:`, getReferral2)
+                      // Return empty array with 2 slots to maintain tree structure
+                      return ["0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000"]
+                    }
+                  } else if (addr === getReferral[1]) {
+                    console.log(`Matched second Step 1 address: ${addr}`)
+                    if (getReferral1 && (getReferral1 as any).length > 0) {
+                      const result = (getReferral1 as any).slice(0, 2)
+                      console.log(`Returning Step 2 referrals for second Step 1:`, result)
+                      return result
+                    } else {
+                      console.log(`No Step 2 data for second Step 1 address - getReferral1 is:`, getReferral1)
+                      // Return empty array with 2 slots to maintain tree structure
+                      return ["0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000"]
+                    }
+                  } else {
+                    console.log(`Address ${addr} not found in Step 1 addresses - checking Step 2 addresses`)
+                    // Check if this is a Step 2 address (from getReferral2 or getReferral1)
+                    const step2Addresses = [
+                      ...(getReferral2 ? (getReferral2 as any).slice(0, 2) : []),
+                      ...(getReferral1 ? (getReferral1 as any).slice(0, 2) : [])
+                    ].filter(addr => addr && addr !== "0x0000000000000000000000000000000000000000")
+                    console.log(`Step 2 addresses:`, step2Addresses)
+                    
+                    if (step2Addresses.includes(addr)) {
+                      console.log(`Address ${addr} is a Step 2 address - fetching Step 3 referrals`)
+                      // Check which Step 2 address this is and return corresponding Step 3 referrals
+                      if (getReferral2 && (getReferral2 as any)[0] === addr) {
+                        console.log(`Matched first Step 2 address from getReferral2: ${addr}`)
+                        if (getReferral3_1 && (getReferral3_1 as any).length > 0) {
+                          const result = (getReferral3_1 as any).slice(0, 2)
+                          console.log(`Returning Step 3 referrals for first Step 2:`, result)
+                          return result
+                        }
+                      } else if (getReferral2 && (getReferral2 as any)[1] === addr) {
+                        console.log(`Matched second Step 2 address from getReferral2: ${addr}`)
+                        if (getReferral3_2 && (getReferral3_2 as any).length > 0) {
+                          const result = (getReferral3_2 as any).slice(0, 2)
+                          console.log(`Returning Step 3 referrals for second Step 2:`, result)
+                          return result
+                        }
+                      } else if (getReferral1 && (getReferral1 as any)[0] === addr) {
+                        console.log(`Matched third Step 2 address from getReferral1: ${addr}`)
+                        if (getReferral3_3 && (getReferral3_3 as any).length > 0) {
+                          const result = (getReferral3_3 as any).slice(0, 2)
+                          console.log(`Returning Step 3 referrals for third Step 2:`, result)
+                          return result
+                        }
+                      } else if (getReferral1 && (getReferral1 as any)[1] === addr) {
+                        console.log(`Matched fourth Step 2 address from getReferral1: ${addr}`)
+                        if (getReferral3_4 && (getReferral3_4 as any).length > 0) {
+                          const result = (getReferral3_4 as any).slice(0, 2)
+                          console.log(`Returning Step 3 referrals for fourth Step 2:`, result)
+                          return result
+                        }
+                      }
+                      console.log(`No Step 3 data found for Step 2 address: ${addr}`)
+                      return []
+                    } else {
+                      console.log(`Address ${addr} not found in any Step 2 addresses`)
+                    }
+                  }
+                } else {
+                  console.log(`No Step 1 referrals available`)
+                }
+                console.log(`No referrals found for address: ${addr}`)
                 return []
               }}
             />
