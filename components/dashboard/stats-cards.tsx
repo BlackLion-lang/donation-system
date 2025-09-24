@@ -4,6 +4,108 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { Star, Users, Trophy, Flame } from "lucide-react"
+import { useEffect, useState } from "react"
+import { useWriteContract, useReadContract, useAccount } from "wagmi"
+import { CONTRACTS, ABIS } from "@/constant/constant"
+import { formatUnits } from "viem"
+
+// Client-side withdrawal component with wagmi hooks
+function WithdrawButtonClient({ 
+  withdrawalPoints, 
+  onWithdrawSuccess
+}: { 
+  withdrawalPoints: number
+  onWithdrawSuccess: () => void
+}) {
+  const [isWithdrawing, setIsWithdrawing] = useState(false)
+  const { writeContract: withdraw, isPending, isSuccess } = useWriteContract()
+  const { address } = useAccount()
+  
+  // Get user balance from contract
+  const { data: userData } = useReadContract({
+    address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+    abi: ABIS.Referral,
+    functionName: "users",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  })
+  
+  // Extract balance from user data
+  const userBalance = userData ? Number(formatUnits((userData as any)[5], 6)) : 0
+  
+  // Handle successful withdrawal
+  useEffect(() => {
+    if (isSuccess) {
+      onWithdrawSuccess()
+    }
+  }, [isSuccess, onWithdrawSuccess])
+  
+  const handleWithdraw = async () => {
+    if (!withdraw) return
+    
+    setIsWithdrawing(true)
+    
+    try {
+      await withdraw({
+        address: CONTRACTS.Referral_ADDRESS as `0x${string}`,
+        abi: ABIS.Referral,
+        functionName: "withdrawCredit",
+        args: [],
+      })
+    } catch (error) {
+      console.error('Withdrawal failed:', error)
+      setIsWithdrawing(false)
+    }
+  }
+  
+  const isDisabled = withdrawalPoints < 75 || isWithdrawing || isPending || userBalance <= 0
+  
+  return (
+    <Button
+      size="sm"
+      className="w-full text-xs mt-2"
+      onClick={handleWithdraw}
+      disabled={isDisabled}
+    >
+      {isWithdrawing || isPending ? "Withdrawing..." : 
+       withdrawalPoints >= 75 ?  userBalance <= 0 ? "No Balance" : `Withdraw($${userBalance})` : `${75 - withdrawalPoints} more needed`}
+    </Button>
+  )
+}
+
+// Wrapper component that only renders on client side
+function WithdrawButton({ 
+  withdrawalPoints, 
+  onWithdrawSuccess
+}: { 
+  withdrawalPoints: number
+  onWithdrawSuccess: () => void
+}) {
+  const [isClient, setIsClient] = useState(false)
+  
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+  
+  if (!isClient) {
+    return (
+      <Button
+        size="sm"
+        className="w-full text-xs mt-2"
+        disabled
+      >
+        Loading...
+      </Button>
+    )
+  }
+  
+  return (
+    <WithdrawButtonClient 
+      withdrawalPoints={withdrawalPoints}
+      onWithdrawSuccess={onWithdrawSuccess}
+    />
+  )
+}
 
 interface StatsCardsProps {
   withdrawalPoints: number
@@ -11,6 +113,8 @@ interface StatsCardsProps {
   dailyTasksCompleted: number
   streak: number
   handleWithdraw: () => void
+  setWithdrawalPoints: (points: number) => void
+  userBalance?: number
 }
 
 export function StatsCards({
@@ -19,7 +123,21 @@ export function StatsCards({
   dailyTasksCompleted,
   streak,
   handleWithdraw,
+  setWithdrawalPoints,
 }: StatsCardsProps) {
+  // Handle successful withdrawal
+  const handleWithdrawSuccess = () => {
+    setWithdrawalPoints(0)
+    // Save updated state to localStorage
+    const dataToSave = {
+      withdrawalPoints: 0,
+      streak,
+      totalEarned: 0, // This should come from context
+      dailyTasksCompleted,
+      lastLoginDate: new Date().toISOString().split('T')[0],
+    }
+    localStorage.setItem("olympus-donation-data", JSON.stringify(dataToSave))
+  }
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
       <Card className="hover-lift scale-in holographic">
@@ -34,14 +152,10 @@ export function StatsCards({
             <p className="text-xs text-muted-foreground">
               {withdrawalPoints >= 75 ? "Ready to withdraw!" : `${75 - withdrawalPoints} more points needed`}
             </p>
-            <Button
-              size="sm"
-              className="w-full text-xs mt-2"
-              onClick={handleWithdraw}
-              disabled={withdrawalPoints < 75}
-            >
-              {withdrawalPoints >= 75 ? "Withdraw" : `${75 - withdrawalPoints} more needed`}
-            </Button>
+            <WithdrawButton 
+              withdrawalPoints={withdrawalPoints}
+              onWithdrawSuccess={handleWithdrawSuccess}
+            />
           </div>
         </CardContent>
       </Card>

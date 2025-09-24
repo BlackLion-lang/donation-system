@@ -23,6 +23,8 @@ import { useTasks } from "@/hooks/use-tasks"
 import { levelsData } from "@/lib/levels"
 import { useContractLevels } from "@/hooks/use-contract-levels"
 import { useState, useEffect } from "react"
+import { useWriteContract } from "wagmi"
+import { CONTRACTS, ABIS } from "@/constant/constant"
 
 function DashboardContent() {
   const [timeUntilReset, setTimeUntilReset] = useState("")
@@ -33,6 +35,7 @@ function DashboardContent() {
     referrals,
     dailyTasksCompleted,
     withdrawalPoints,
+    setWithdrawalPoints,
     isConnected,
     setIsConnected,
     setBalance,
@@ -87,7 +90,13 @@ function DashboardContent() {
     processDeposit,
   } = useDeposit()
 
-  const { completeDailyTask, handleWithdraw } = useTasks()
+  const { completeDailyTask } = useTasks()
+  
+  // Simple withdraw function that will be handled by StatsCards component
+  const handleWithdraw = () => {
+    // This will be handled by the StatsCards component internally
+    console.log('Withdraw requested')
+  }
 
   const connectWallet = () => {
     setIsConnected(true)
@@ -151,6 +160,7 @@ function DashboardContent() {
               dailyTasksCompleted={dailyTasksCompleted}
               streak={streak}
               handleWithdraw={handleWithdraw}
+              setWithdrawalPoints={setWithdrawalPoints}
             />
           </TabsContent>
 

@@ -237,8 +237,10 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
   // ---------------- APPROVE USDT & DEPOSIT ----------------
   let approve: any = null
   let deposit: any = null
+  let withdraw: any = null
   let isApproving = false
   let isDepositing = false
+  let isWithdrawing = false
   let approveSuccess = false
   let depositSuccess = false
   try {
@@ -246,6 +248,10 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
     approve = approveHook.writeContract
     isApproving = approveHook.isPending
     const approveSuccess = approveHook.isSuccess
+    const withdrawHook = useWriteContract()
+    withdraw = withdrawHook.writeContract
+    isWithdrawing = withdrawHook.isPending
+    const withdrawSuccess = withdrawHook.isSuccess
     const depositHook = useWriteContract()
     deposit = depositHook.writeContract
     isDepositing = depositHook.isPending
@@ -289,6 +295,7 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
       args: [finalReferrer, currentLevel],
     })
   }
+
 
   // Generate referral code and copy
   const cookies = new Cookies();
@@ -466,110 +473,159 @@ export function LevelCard({ currentLevelData, walletAddress }: LevelCardProps) {
 
         <Dialog open={isDepositModalOpen} onOpenChange={setIsDepositModalOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full deposit-button hover-lift" size="lg" disabled={!isConnected}>
-              <CreditCard className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-              <span className="text-sm sm:text-base">
-                Deposit ${levelDepositAmount} - Start Level {currentLevel}
-              </span>
+            <Button 
+              className="w-full deposit-button hover-lift" 
+              size="lg" 
+              disabled={!isConnected || registered}
+              variant={registered ? "secondary" : "default"}
+            >
+              {registered ? (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="text-sm sm:text-base">
+                    Already Deposited
+                  </span>
+                </>
+              ) : (
+                <>
+                  <CreditCard className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="text-sm sm:text-base">
+                    Deposit ${levelDepositAmount} - Start Level {currentLevel}
+                  </span>
+                </>
+              )}
             </Button>
           </DialogTrigger>
           <DialogContent className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-md z-50">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <span className="text-xl sm:text-2xl">{currentLevelData?.icon || "🏆"}</span>
-                <span className="text-sm sm:text-base">Deposit for {currentLevelData?.name || "Level"}</span>
+                <span className="text-sm sm:text-base">
+                  {registered ? `Level ${currentLevel} Status` : `Deposit for ${currentLevelData?.name || "Level"}`}
+                </span>
               </DialogTitle>
               <DialogDescription className="text-sm">
-                Make your investment to start your heroic journey at Level {currentLevel}
+                {registered 
+                  ? `You have already completed your deposit for Level ${currentLevel}. Build your network to progress to the next level.`
+                  : `Make your investment to start your heroic journey at Level ${currentLevel}`
+                }
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-center">
-                <div className="p-3 sm:p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                  <p className="text-sm text-muted-foreground">Required Amount</p>
-                  <p className="text-xl sm:text-2xl font-bold text-green-500">${levelDepositAmount}</p>
+              {registered ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-center">
+                  <div className="p-3 sm:p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <p className="text-sm text-muted-foreground">Your Investment</p>
+                    <p className="text-xl sm:text-2xl font-bold text-green-500">${levelDepositAmount}</p>
+                  </div>
+                  <div className="p-3 sm:p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                    <p className="text-sm text-muted-foreground">Potential Return</p>
+                    <p className="text-xl sm:text-2xl font-bold text-yellow-500">${levelDepositAmount * 8}</p>
+                  </div>
                 </div>
-                <div className="p-3 sm:p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                  <p className="text-sm text-muted-foreground">Expected Return</p>
-                  <p className="text-xl sm:text-2xl font-bold text-yellow-500">${levelDepositAmount * 8}</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-center">
+                  <div className="p-3 sm:p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <p className="text-sm text-muted-foreground">Required Amount</p>
+                    <p className="text-xl sm:text-2xl font-bold text-green-500">${levelDepositAmount}</p>
+                  </div>
+                  <div className="p-3 sm:p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                    <p className="text-sm text-muted-foreground">Expected Return</p>
+                    <p className="text-xl sm:text-2xl font-bold text-yellow-500">${levelDepositAmount * 8}</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="referrer-address">
-                    Referrer Address {finalRef && <span className="text-green-500">(Auto-detected)</span>}
-                  </Label>
-                  <Input
-                    id="referrer-address"
-                    type="text"
-                    // placeholder="0x..."
-                    value={finalRef ? refAddress : (referrerAddress || "0x0000000000000000000000000000000000000000")}
-                    onChange={(e) => setReferrerAddress(e.target.value)}
-                    readOnly={!!finalRef}
-                    disabled={!!finalRef}
-                    className={`text-center text-lg font-semibold h-12 ${finalRef ? ' cursor-not-allowed' : ''}`}
-                  />
-                  {refAddress && refAddress !== "0x0000000000000000000000000000000000000000" && (
-                    <p className="text-xs text-green-500 text-center">
-                      Referrer automatically detected from your referral link.
-                    </p>
-                  )}
-                  {finalRef && refAddress === "0x0000000000000000000000000000000000000000" && (
-                    <p className="text-xs text-red-500 text-center">
-                      Invalid referral link. Please check the link or enter referrer manually.
-                    </p>
-                  )}
-                  {!finalRef && !refAddress && (
-                    <p className="text-xs text-muted-foreground text-center">
-                      Enter referrer address or visit with a referral link
-                    </p>
-                  )}
-                  {!isConnected && (
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                      <AlertCircle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
-                      <p className="text-sm text-yellow-500">Please connect your wallet to continue</p>
+                {!registered && (
+                  <div className="space-y-2">
+                    <Label htmlFor="referrer-address">
+                      Referrer Address {finalRef && <span className="text-green-500">(Auto-detected)</span>}
+                    </Label>
+                    <Input
+                      id="referrer-address"
+                      type="text"
+                      // placeholder="0x..."
+                      value={finalRef ? refAddress : (referrerAddress || "0x0000000000000000000000000000000000000000")}
+                      onChange={(e) => setReferrerAddress(e.target.value)}
+                      readOnly={!!finalRef}
+                      disabled={!!finalRef}
+                      className={`text-center text-lg font-semibold h-12 ${finalRef ? ' cursor-not-allowed' : ''}`}
+                    />
+                    {refAddress && refAddress !== "0x0000000000000000000000000000000000000000" && (
+                      <p className="text-xs text-green-500 text-center">
+                        Referrer automatically detected from your referral link.
+                      </p>
+                    )}
+                    {finalRef && refAddress === "0x0000000000000000000000000000000000000000" && (
+                      <p className="text-xs text-red-500 text-center">
+                        Invalid referral link. Please check the link or enter referrer manually.
+                      </p>
+                    )}
+                    {!finalRef && !refAddress && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        Enter referrer address or visit with a referral link
+                      </p>
+                    )}
+                    {!isConnected && (
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                        <AlertCircle className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                        <p className="text-sm text-yellow-500">Please connect your wallet to continue</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {registered && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                      <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-green-500">Deposit Completed</p>
+                        <p className="text-xs text-green-600">You have successfully deposited for Level {currentLevel}</p>
+                      </div>
                     </div>
-                  )}
-                </div>
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground mb-2">Next Steps:</p>
+                      <p className="text-xs text-muted-foreground">
+                        Build your referral network to progress to Level {currentLevel + 1}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
               <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
                 <AlertCircle className="h-4 w-4 text-blue-500 flex-shrink-0" />
                 <p className="text-sm text-blue-500">Your wallet balance: {balanceUSDT} USDT</p>
               </div>
 
-              {/* <Button
-                onClick={processDeposit}
-                className="w-full deposit-button h-12"
-                size="lg"
-                disabled={isProcessingDeposit || !depositAmount}
-              >
-                {isProcessingDeposit ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    <span className="text-sm sm:text-base">Processing Transaction...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    <span className="text-sm sm:text-base">Confirm Deposit</span>
-                  </>
-                )}
-              </Button> */}
-              {!approved ? (
-                <Button
-                  onClick={handleApprove}
-                  className="w-full deposit-button h-12"
-                  disabled={isApproving || !levelDepositAmount}
-                >
-                  {isApproving ? "Approving..." : "Approve USDT"}
-                </Button>
+              {!registered ? (
+                <>
+                  {!approved ? (
+                    <Button
+                      onClick={handleApprove}
+                      className="w-full deposit-button h-12"
+                      disabled={isApproving || !levelDepositAmount}
+                    >
+                      {isApproving ? "Approving..." : "Approve USDT"}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleDeposit}
+                      disabled={isDepositing || !levelDepositAmount}
+                      className="w-full deposit-button h-12"
+                    >
+                      {isDepositing ? "Depositing..." : "Confirm Deposit"}
+                    </Button>
+                  )}
+                </>
               ) : (
                 <Button
-                  onClick={handleDeposit}
-                  disabled={isDepositing || !levelDepositAmount}
-                  className="w-full deposit-button h-12"
+                  className="w-full h-12"
+                  variant="secondary"
+                  disabled
                 >
-                  {isDepositing ? "Depositing..." : "Confirm Deposit"}
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Deposit Completed
                 </Button>
               )}
             </div>
